@@ -25,7 +25,7 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
   const { prospect, messages } = conversation;
 
   return (
-    <div className="flex flex-1 flex-col bg-background">
+    <div className="flex flex-1 min-h-0 flex-col bg-background">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
         <div className="flex items-center gap-3">
@@ -48,30 +48,44 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
       {/* Messages */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
-        {messages.map((msg, index) => (
-          <div
-            key={msg.id}
-            className={cn(
-              "flex",
-              msg.isFromProspect ? "justify-start" : "justify-end"
-            )}
-          >
+        {messages.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            No messages yet.
+          </div>
+        ) : (
+          messages.map((msg) => (
             <div
+              key={msg.id}
               className={cn(
-                "max-w-[70%] rounded-2xl px-4 py-2.5",
-                msg.isFromProspect
-                  ? "bg-card text-card-foreground shadow-sm"
-                  : "bg-primary text-primary-foreground"
+                "flex",
+                msg.isFromProspect ? "justify-start" : "justify-end"
               )}
             >
-              <p className="text-sm">{msg.content}</p>
+              <div
+                className={cn(
+                  "max-w-[70%] rounded-2xl px-4 py-2.5",
+                  msg.isFromProspect
+                    ? "bg-card text-card-foreground shadow-sm"
+                    : "bg-primary text-primary-foreground"
+                )}
+              >
+                <p className="text-sm">{msg.content}</p>
+                {msg.timestamp && (
+                  <span
+                    className={cn(
+                      "mt-1 block text-[11px]",
+                      msg.isFromProspect
+                        ? "text-muted-foreground"
+                        : "text-primary-foreground/80 text-right"
+                    )}
+                  >
+                    {msg.timestamp}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-        
-        <div className="flex justify-center">
-          <span className="text-xs text-muted-foreground">Today 5:12PM</span>
-        </div>
+          ))
+        )}
       </div>
 
       {/* Composer */}

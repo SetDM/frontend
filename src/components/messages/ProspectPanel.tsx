@@ -1,20 +1,37 @@
-import { Prospect } from "@/types";
+import { Prospect, InstagramUserProfile } from "@/types";
 import { StageBadge } from "@/components/StageBadge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useState, useEffect } from "react";
 
 interface ProspectPanelProps {
   prospect: Prospect | null;
+  profile?: InstagramUserProfile | null;
   aiNotes: string[];
   queuedMessage?: {
     content: string;
     sendsIn: number;
   };
+  onToggleAutopilot?: (conversationId: string, enabled: boolean) => void | Promise<void>;
+  autopilotUpdating?: boolean;
 }
 
-export function ProspectPanel({ prospect, aiNotes, queuedMessage }: ProspectPanelProps) {
+const formatCount = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "0";
+  }
+  return value.toLocaleString();
+};
+
+export function ProspectPanel({
+  prospect,
+  profile,
+  aiNotes,
+  queuedMessage,
+  onToggleAutopilot,
+  autopilotUpdating = false,
+}: ProspectPanelProps) {
   const [countdown, setCountdown] = useState(queuedMessage?.sendsIn || 0);
 
   useEffect(() => {
@@ -25,6 +42,7 @@ export function ProspectPanel({ prospect, aiNotes, queuedMessage }: ProspectPane
       }, 1000);
       return () => clearInterval(interval);
     }
+    setCountdown(0);
   }, [queuedMessage]);
 
   const formatTime = (seconds: number) => {
@@ -35,37 +53,67 @@ export function ProspectPanel({ prospect, aiNotes, queuedMessage }: ProspectPane
 
   if (!prospect) {
     return (
-      <div className="w-80 border-l border-border bg-card p-4">
+      <div className="flex h-full w-80 flex-col overflow-auto border-l border-border bg-card p-4">
         <p className="text-center text-muted-foreground">No prospect selected</p>
       </div>
     );
   }
 
+  const followerCount = profile?.followerCount ?? prospect.followerCount ?? prospect.followers;
+  const followsBusiness = profile?.isUserFollowBusiness;
+  const businessFollowsUser = profile?.isBusinessFollowUser;
+  const sanitizedUsername = profile?.username?.replace(/^@+/, "");
+  const displayHandle = sanitizedUsername ? `@${sanitizedUsername}` : prospect.handle;
+  const displayName = profile?.name || sanitizedUsername || prospect.name;
+  const initialsSource = (sanitizedUsername || displayName || prospect.handle || "IG").trim();
+  const initials = initialsSource
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((segment) => segment[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "IG";
+  const avatarSrc = profile?.profilePic || prospect.profilePic || prospect.avatar;
+
   return (
-    <div className="w-80 border-l border-border bg-card overflow-auto">
+    <div className="flex h-full w-80 flex-col overflow-auto border-l border-border bg-card">
       {/* Profile Card */}
       <div className="border-b border-border p-4">
         <div className="flex flex-col items-center text-center">
           <div className="relative">
             <Avatar className="h-16 w-16">
+              {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
               <AvatarFallback className="bg-gradient-to-br from-primary/20 to-pink/20 text-foreground text-lg font-medium">
-                {prospect.name.split(' ').map(n => n[0]).join('')}
+                {initials}
               </AvatarFallback>
             </Avatar>
             <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-pink text-[10px] font-bold text-pink-foreground">
               !
             </div>
           </div>
-          <h3 className="mt-3 font-semibold text-foreground">{prospect.name}</h3>
-          <p className="text-sm text-muted-foreground">{prospect.handle}</p>
+          <h3 className="mt-3 font-semibold text-foreground">{displayName}</h3>
+          <p className="text-sm text-muted-foreground">{displayHandle}</p>
           
-          <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground">
             <div>
-              <span className="font-medium text-foreground">{prospect.followers.toLocaleString()}</span> followers
+              <span className="font-medium text-foreground">{formatCount(followerCount)}</span> followers
             </div>
-            <div>
-              <span className="font-medium text-foreground">{prospect.following.toLocaleString()}</span> following
-            </div>
+            {typeof followsBusiness === "boolean" && (
+              <div>
+                <span className="font-medium text-foreground">
+                  {followsBusiness ? "Yes" : "No"}
+                </span>{" "}
+                follows your business
+              </div>
+            )}
+            {typeof businessFollowsUser === "boolean" && (
+              <div>
+                <span className="font-medium text-foreground">
+                  {businessFollowsUser ? "Yes" : "No"}
+                </span>{" "}
+                business follows this user
+              </div>
+            )}
           </div>
 
           <div className="mt-3 flex items-center gap-2">
@@ -74,7 +122,16 @@ export function ProspectPanel({ prospect, aiNotes, queuedMessage }: ProspectPane
 
           <div className="mt-4 flex w-full items-center justify-between rounded-lg bg-secondary/50 px-3 py-2">
             <span className="text-sm text-muted-foreground">Autopilot</span>
-            <Switch checked={prospect.autopilotEnabled} />
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={prospect.autopilotEnabled}
+                disabled={autopilotUpdating}
+                onCheckedChange={(checked) => onToggleAutopilot?.(prospect.id, checked)}
+              />
+              {autopilotUpdating && (
+                <span className="text-xs text-muted-foreground">Updating...</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -94,11 +151,15 @@ export function ProspectPanel({ prospect, aiNotes, queuedMessage }: ProspectPane
       <div className="border-b border-border p-4">
         <h4 className="mb-3 font-medium text-foreground">AI Notes</h4>
         <div className="space-y-2 rounded-lg bg-secondary/30 p-3">
-          {aiNotes.map((note, index) => (
-            <p key={index} className="text-xs text-muted-foreground">
-              • {note}
-            </p>
-          ))}
+          {aiNotes.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No AI notes yet.</p>
+          ) : (
+            aiNotes.map((note, index) => (
+              <p key={index} className="text-xs text-muted-foreground">
+                • {note}
+              </p>
+            ))
+          )}
         </div>
       </div>
 

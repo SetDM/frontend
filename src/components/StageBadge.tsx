@@ -27,18 +27,18 @@ const stageConfig: Record<FunnelStage, { label: string; className: string }> = {
     label: "Sale",
     className: "bg-stage-sale/15 text-stage-sale",
   },
-  ignored: {
-    label: "Ignored",
-    className: "bg-stage-ignored/15 text-stage-ignored",
-  },
-  unread: {
-    label: "Unread",
-    className: "bg-stage-unread/15 text-stage-unread",
+  flagged: {
+    label: "Flagged",
+    className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-200",
   },
 };
 
 export function StageBadge({ stage, className }: StageBadgeProps) {
-  const config = stageConfig[stage];
+  const fallbackConfig = {
+    label: stage.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+    className: "bg-secondary text-secondary-foreground",
+  };
+  const config = stageConfig[stage] ?? fallbackConfig;
   
   return (
     <span
