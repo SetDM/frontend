@@ -4,15 +4,50 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MoreVertical, Plus, Send } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 
 interface ChatWindowProps {
   conversation: Conversation | null;
+  onSendMessage?: (conversationId: string, content: string) => Promise<void> | void;
 }
 
-export function ChatWindow({ conversation }: ChatWindowProps) {
+export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
   const [message, setMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    setMessage("");
+    setIsSending(false);
+  }, [conversation?.id]);
+
+  const handleSend = async () => {
+    if (!conversation || !onSendMessage) {
+      return;
+    }
+
+    const trimmed = message.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    try {
+      setIsSending(true);
+      await onSendMessage(conversation.id, trimmed);
+      setMessage("");
+    } catch (error) {
+      console.error("Failed to send message", error);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleKeyDown = async (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      await handleSend();
+    }
+  };
 
   if (!conversation) {
     return (
@@ -63,10 +98,15 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
             >
               <div
                 className={cn(
-                  "max-w-[70%] rounded-2xl px-4 py-2.5",
+                  "max-w-[70%] rounded-2xl px-4 py-2.5 border",
                   msg.isFromProspect
-                    ? "bg-card text-card-foreground shadow-sm"
-                    : "bg-primary text-primary-foreground"
+                    ? "bg-card text-card-foreground shadow-sm border-transparent"
+                    : cn(
+                        "bg-primary text-primary-foreground",
+                        msg.isAiGenerated
+                          ? "border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.55)] ring-2 ring-offset-2 ring-amber-300/80 ring-offset-background"
+                          : "border-transparent",
+                      )
                 )}
               >
                 <p className="text-sm">{msg.content}</p>
@@ -98,10 +138,16 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
             placeholder="Type a message..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
             className="min-h-[44px] max-h-32 resize-none border-0 bg-secondary/50 focus-visible:ring-1"
             rows={1}
           />
-          <Button size="icon" className="shrink-0">
+          <Button
+            size="icon"
+            className="shrink-0"
+            onClick={handleSend}
+            disabled={isSending || !message.trim()}
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>

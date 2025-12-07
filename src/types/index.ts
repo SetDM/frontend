@@ -33,6 +33,7 @@ export interface Prospect {
   lastMessage: string;
   lastMessageTime: string;
   isUnread: boolean;
+  isFlagged?: boolean;
 }
 
 export interface Message {
@@ -41,6 +42,7 @@ export interface Message {
   timestamp: string;
   isFromProspect: boolean;
   status?: 'sent' | 'delivered' | 'seen';
+  isAiGenerated?: boolean;
 }
 
 export interface Conversation {
@@ -48,10 +50,7 @@ export interface Conversation {
   prospect: Prospect;
   messages: Message[];
   aiNotes: string[];
-  queuedMessage?: {
-    content: string;
-    sendsIn: number; // seconds
-  };
+  queuedMessages: QueuedMessage[];
 }
 
 export interface ConversationMessageRecord {
@@ -62,6 +61,7 @@ export interface ConversationMessageRecord {
     mid?: string;
     [key: string]: unknown;
   };
+  isAiGenerated?: boolean;
 }
 
 export interface ConversationRecord {
@@ -74,11 +74,25 @@ export interface ConversationRecord {
   messages?: ConversationMessageRecord[];
   metadata?: Record<string, unknown>;
   aiNotes?: string[];
-  queuedMessage?: {
-    content: string;
-    sendsIn: number;
-  };
+  queuedMessages?: QueuedMessageRecord[];
   isAutopilotOn?: boolean;
+  isFlagged?: boolean;
+}
+
+export interface QueuedMessageRecord {
+  id?: string;
+  content?: string;
+  scheduledFor?: string;
+  createdAt?: string;
+  delayMs?: number;
+}
+
+export interface QueuedMessage {
+  id: string;
+  content: string;
+  scheduledFor: string | null;
+  sendsIn: number; // seconds
+  delayMs?: number;
 }
 
 export interface InstagramUserProfile {

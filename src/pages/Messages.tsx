@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { ConversationList } from "@/components/messages/ConversationList";
 import { ChatWindow } from "@/components/messages/ChatWindow";
 import { ProspectPanel } from "@/components/messages/ProspectPanel";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { CONVERSATION_ENDPOINTS, USER_ENDPOINTS } from "@/lib/config";
 import type {
@@ -14,6 +15,7 @@ import type {
   Message,
   Prospect,
   InstagramUserProfile,
+  QueuedMessage,
 } from "@/types";
 
 const FUNNEL_STAGES: FunnelStage[] = [
@@ -26,6 +28,8 @@ const FUNNEL_STAGES: FunnelStage[] = [
 ];
 
 const stageFilters: (FunnelStage | "all")[] = ["all", ...FUNNEL_STAGES];
+
+const CONVERSATION_REFRESH_INTERVAL_MS = 5000; // 5s polling cadence for new data
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
@@ -56,6 +60,23 @@ const coerceDate = (input?: string | number | Date) => {
   }
 
   return null;
+};
+
+const extractNotesFromPayload = (payload: unknown): string[] => {
+  const container = (payload as { data?: unknown })?.data ?? payload;
+
+  if (!container || typeof container !== "object") {
+    return [];
+  }
+
+  const maybeNotes = (container as { notes?: unknown }).notes;
+  if (!Array.isArray(maybeNotes)) {
+    return [];
+  }
+
+  return maybeNotes
+    .map((note) => (typeof note === "string" ? note.trim() : ""))
+    .filter((note): note is string => Boolean(note));
 };
 
 const formatRelativeTime = (input?: string | number | Date) => {
@@ -127,6 +148,23 @@ const normalizeStageTag = (stageTag?: string | null): FunnelStage => {
   return FUNNEL_STAGES.find((stage) => stage === normalized) ?? "responded";
 };
 
+const resolveProspectStage = (record?: ConversationRecord): {
+  stage: FunnelStage;
+  isFlagged: boolean;
+} => {
+  if (!record) {
+    return { stage: "responded", isFlagged: false };
+  }
+
+  const normalizedStage = normalizeStageTag(record.stageTag);
+  const isFlagged = Boolean(record.isFlagged) || normalizedStage === "flagged";
+
+  return {
+    stage: isFlagged ? "flagged" : normalizedStage,
+    isFlagged,
+  };
+};
+
 const deriveConversationId = (record: ConversationRecord) => {
   if (record.conversationId && record.conversationId.length > 0) {
     return record.conversationId;
@@ -177,6 +215,7 @@ const buildProspectFromRecord = (
       : null;
   const autopilotEnabledFromRecord =
     typeof record.isAutopilotOn === "boolean" ? record.isAutopilotOn : false;
+  const { stage: resolvedStage, isFlagged } = resolveProspectStage(record);
 
   return {
     id: conversationId,
@@ -186,12 +225,13 @@ const buildProspectFromRecord = (
     handle: normalizedHandle,
     avatar: profile?.profilePic || "",
     profilePic: profile?.profilePic || null,
-    stage: normalizeStageTag(record.stageTag),
+    stage: resolvedStage,
     followers: followerCount ?? 0,
     followerCount,
     following: 0,
     leadScore: 0,
     autopilotEnabled: autopilotEnabledFromRecord,
+    isFlagged,
     isUserFollowBusiness: profile?.isUserFollowBusiness ?? null,
     isBusinessFollowUser: profile?.isBusinessFollowUser ?? null,
     lastMessage: lastMessage?.content ?? "No messages yet",
@@ -206,16 +246,19 @@ const buildConversationFromRecord = (
 ): Conversation => {
   const conversationId = deriveConversationId(record);
   const rawMessages = Array.isArray(record.messages) ? record.messages : [];
+  const queuedMessagesRaw = Array.isArray(record.queuedMessages) ? record.queuedMessages : [];
 
   const normalizedMessages: MessageWithSort[] = rawMessages.map((message, index) => {
     const timestampDate = coerceDate(message?.timestamp);
     const content = typeof message?.content === "string" ? message.content.trim() : "";
+    const isAiGenerated = Boolean(message?.isAiGenerated);
 
     return {
       id: message?.metadata?.mid ?? `${conversationId}-${index}`,
       content,
       timestamp: timestampDate ? formatMessageTimestamp(timestampDate) : "",
       isFromProspect: (message?.role ?? "user") !== "assistant",
+      isAiGenerated,
       sortValue: timestampDate?.getTime() ?? index,
     };
   });
@@ -228,6 +271,46 @@ const buildConversationFromRecord = (
   const fallbackTimestamp =
     rawMessages.length > 0 ? rawMessages[rawMessages.length - 1]?.timestamp : undefined;
 
+  const now = Date.now();
+  const queuedMessages = queuedMessagesRaw
+    .map((queued, index) => {
+      const content = typeof queued?.content === "string" ? queued.content.trim() : "";
+      if (!content) {
+        return null;
+      }
+
+      const scheduledDate = coerceDate(queued?.scheduledFor);
+      const scheduledIso = scheduledDate ? scheduledDate.toISOString() : null;
+      const sendsInSeconds = scheduledDate
+        ? Math.max(0, Math.floor((scheduledDate.getTime() - now) / 1000))
+        : 0;
+
+      const normalized: QueuedMessage = {
+        id:
+          typeof queued?.id === "string" && queued.id.length > 0
+            ? queued.id
+            : `${conversationId}-queued-${index}`,
+        content,
+        scheduledFor: scheduledIso,
+        sendsIn: sendsInSeconds,
+        delayMs: typeof queued?.delayMs === "number" ? queued.delayMs : undefined,
+      };
+      return normalized;
+    })
+    .filter((entry): entry is QueuedMessage => Boolean(entry))
+    .sort((a, b) => {
+      if (a.scheduledFor && b.scheduledFor) {
+        return new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime();
+      }
+      if (a.scheduledFor) {
+        return -1;
+      }
+      if (b.scheduledFor) {
+        return 1;
+      }
+      return 0;
+    });
+
   return {
     id: conversationId,
     prospect: buildProspectFromRecord(
@@ -239,7 +322,7 @@ const buildConversationFromRecord = (
     ),
     messages: orderedMessages,
     aiNotes: Array.isArray(record.aiNotes) ? record.aiNotes : [],
-    queuedMessage: record.queuedMessage,
+    queuedMessages,
   };
 };
 
@@ -308,10 +391,19 @@ export default function Messages() {
   const [profilesById, setProfilesById] = useState<Record<string, InstagramUserProfile>>({});
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autopilotBusyConversationId, setAutopilotBusyConversationId] = useState<string | null>(
     null,
   );
+  const [aiNotesByConversationId, setAiNotesByConversationId] = useState<Record<string, string[]>>({});
+  const [aiNotesRequestConversationId, setAiNotesRequestConversationId] = useState<string | null>(
+    null,
+  );
+  const [queueCancelBusyIds, setQueueCancelBusyIds] = useState<string[]>([]);
+  const [queueSendBusyIds, setQueueSendBusyIds] = useState<string[]>([]);
+  const refreshInFlightRef = useRef(false);
 
   const fetchProfilesForRecords = useCallback(
     async (records: ConversationRecord[], signal?: AbortSignal) => {
@@ -395,14 +487,30 @@ export default function Messages() {
 
       const records = extractConversationRecords(payload);
       const profiles = await fetchProfilesForRecords(records, signal);
+      const aiNotesMap: Record<string, string[]> = {};
 
       const items = records.map((record) => {
+        const conversationId = deriveConversationId(record);
+        if (
+          conversationId &&
+          Array.isArray(record.aiNotes) &&
+          record.aiNotes.length > 0
+        ) {
+          const normalizedNotes = record.aiNotes
+            .map((note) => (typeof note === "string" ? note.trim() : ""))
+            .filter((note): note is string => Boolean(note));
+
+          if (normalizedNotes.length) {
+            aiNotesMap[conversationId] = normalizedNotes;
+          }
+        }
+
         const instagramId = typeof record.senderId === "string" ? record.senderId : "";
         const profile = instagramId ? profiles[instagramId] : undefined;
         return buildConversationFromRecord(record, profile);
       });
 
-      return { conversations: items, profiles };
+      return { conversations: items, profiles, aiNotesMap };
     },
     [authorizedFetch, fetchProfilesForRecords],
   );
@@ -416,10 +524,17 @@ export default function Messages() {
       setError(null);
 
       try {
-        const { conversations: items, profiles } = await loadConversations(abortController.signal);
+        const {
+          conversations: items,
+          profiles,
+          aiNotesMap,
+        } = await loadConversations(abortController.signal);
         if (mounted) {
           setConversations(items);
           setProfilesById((prev) => ({ ...prev, ...profiles }));
+          if (aiNotesMap && Object.keys(aiNotesMap).length > 0) {
+            setAiNotesByConversationId((prev) => ({ ...prev, ...aiNotesMap }));
+          }
         }
       } catch (err) {
         if (abortController.signal.aborted) {
@@ -443,19 +558,51 @@ export default function Messages() {
     };
   }, [loadConversations]);
 
-  const refreshConversations = useCallback(async () => {
+  const refreshConversations = useCallback(async (options?: { silent?: boolean }) => {
+    if (refreshInFlightRef.current) {
+      return;
+    }
+
+    const silent = Boolean(options?.silent);
+    refreshInFlightRef.current = true;
     try {
       setError(null);
-      setIsLoading(true);
-      const { conversations: items, profiles } = await loadConversations();
+      if (silent) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      const { conversations: items, profiles, aiNotesMap } = await loadConversations();
       setConversations(items);
       setProfilesById((prev) => ({ ...prev, ...profiles }));
+      if (aiNotesMap && Object.keys(aiNotesMap).length > 0) {
+        setAiNotesByConversationId((prev) => ({ ...prev, ...aiNotesMap }));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load conversations.");
     } finally {
-      setIsLoading(false);
+      if (silent) {
+        setIsRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
+      refreshInFlightRef.current = false;
     }
   }, [loadConversations]);
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      refreshConversations({ silent: true });
+    }, CONVERSATION_REFRESH_INTERVAL_MS);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [autoRefreshEnabled, refreshConversations]);
 
   const prospects = useMemo(() => conversations.map((conversation) => conversation.prospect), [
     conversations,
@@ -504,6 +651,63 @@ export default function Messages() {
     });
   }, [filteredProspects]);
 
+  useEffect(() => {
+    if (!selectedConversationId) {
+      setAiNotesRequestConversationId(null);
+      return;
+    }
+
+    const abortController = new AbortController();
+    const targetConversationId = selectedConversationId;
+
+    setAiNotesRequestConversationId(targetConversationId);
+
+    const fetchNotes = async () => {
+      try {
+        const response = await authorizedFetch(
+          CONVERSATION_ENDPOINTS.notes(targetConversationId),
+          { signal: abortController.signal },
+        );
+
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          const message =
+            payload &&
+            typeof payload === "object" &&
+            payload !== null &&
+            "message" in payload &&
+            typeof (payload as { message?: unknown }).message === "string"
+              ? ((payload as { message?: string }).message as string)
+              : "Failed to load AI notes.";
+          throw new Error(message);
+        }
+
+        const notes = extractNotesFromPayload(payload);
+        setAiNotesByConversationId((prev) => ({ ...prev, [targetConversationId]: notes }));
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          console.error("Failed to fetch AI notes", err);
+        }
+      } finally {
+        setAiNotesRequestConversationId((current) =>
+          current === targetConversationId ? null : current,
+        );
+      }
+    };
+
+    fetchNotes();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [authorizedFetch, selectedConversationId]);
+
   const selectedConversation = useMemo(() => {
     if (!selectedConversationId) {
       return null;
@@ -516,6 +720,12 @@ export default function Messages() {
   const selectedProfile = selectedProspect?.instagramId
     ? profilesById[selectedProspect.instagramId] ?? null
     : null;
+  const currentAiNotes = selectedConversationId
+    ? aiNotesByConversationId[selectedConversationId] ?? []
+    : [];
+  const aiNotesLoading = Boolean(
+    selectedConversationId && aiNotesRequestConversationId === selectedConversationId,
+  );
 
   const handleSelectProspect = useCallback((prospect: Prospect) => {
     setSelectedConversationId(prospect.id);
@@ -589,6 +799,289 @@ export default function Messages() {
     [authorizedFetch, setConversations, setError],
   );
 
+  const handleCancelQueuedMessage = useCallback(
+    async (conversationId: string, queuedMessageId: string) => {
+      if (!conversationId || !queuedMessageId) {
+        return;
+      }
+
+      setQueueCancelBusyIds((prev) =>
+        prev.includes(queuedMessageId) ? prev : [...prev, queuedMessageId],
+      );
+
+      try {
+        const response = await authorizedFetch(
+          CONVERSATION_ENDPOINTS.cancelQueuedMessage(conversationId, queuedMessageId),
+          {
+            method: "DELETE",
+          },
+        );
+
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          const message =
+            payload &&
+            typeof payload === "object" &&
+            payload !== null &&
+            "message" in payload &&
+            typeof (payload as { message?: unknown }).message === "string"
+              ? ((payload as { message?: string }).message as string)
+              : "Failed to cancel queued message.";
+          throw new Error(message);
+        }
+
+        setConversations((prev) =>
+          prev.map((conversation) => {
+            if (conversation.id !== conversationId) {
+              return conversation;
+            }
+
+            return {
+              ...conversation,
+              queuedMessages: conversation.queuedMessages.filter(
+                (message) => message.id !== queuedMessageId,
+              ),
+              prospect: {
+                ...conversation.prospect,
+                autopilotEnabled: false,
+              },
+            };
+          }),
+        );
+
+        await refreshConversations({ silent: true });
+      } catch (err) {
+        console.error("Failed to cancel queued message", err);
+        setError(err instanceof Error ? err.message : "Failed to cancel queued message.");
+      } finally {
+        setQueueCancelBusyIds((prev) => prev.filter((id) => id !== queuedMessageId));
+      }
+    },
+    [authorizedFetch, refreshConversations, setConversations, setError],
+  );
+
+  const handleSendQueuedMessageNow = useCallback(
+    async (conversationId: string, queuedMessageId: string) => {
+      if (!conversationId || !queuedMessageId) {
+        return;
+      }
+
+      setQueueSendBusyIds((prev) =>
+        prev.includes(queuedMessageId) ? prev : [...prev, queuedMessageId],
+      );
+
+      try {
+        const response = await authorizedFetch(
+          CONVERSATION_ENDPOINTS.sendQueuedMessageNow(conversationId, queuedMessageId),
+          {
+            method: "POST",
+          },
+        );
+
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          const message =
+            payload &&
+            typeof payload === "object" &&
+            payload !== null &&
+            "message" in payload &&
+            typeof (payload as { message?: unknown }).message === "string"
+              ? ((payload as { message?: string }).message as string)
+              : "Failed to send queued message immediately.";
+          throw new Error(message);
+        }
+
+        const payloadMessage =
+          payload &&
+          typeof payload === "object" &&
+          "message" in payload
+            ? (payload as { message?: unknown }).message
+            : null;
+
+        const messageContent =
+          payloadMessage &&
+          typeof payloadMessage === "object" &&
+          typeof (payloadMessage as { content?: unknown }).content === "string"
+            ? ((payloadMessage as { content: string }).content as string)
+            : "";
+
+        const timestampRaw =
+          payloadMessage &&
+          typeof payloadMessage === "object" &&
+          typeof (payloadMessage as { timestamp?: unknown }).timestamp === "string"
+            ? ((payloadMessage as { timestamp: string }).timestamp as string)
+            : new Date().toISOString();
+
+        const formattedTimestamp = formatMessageTimestamp(timestampRaw);
+        const messageId =
+          payloadMessage &&
+          typeof payloadMessage === "object" &&
+          typeof (payloadMessage as { id?: unknown }).id === "string" &&
+          (payloadMessage as { id: string }).id.length > 0
+            ? ((payloadMessage as { id: string }).id as string)
+            : `${conversationId}-${Date.now()}`;
+
+        setConversations((prev) =>
+          prev.map((conversation) => {
+            if (conversation.id !== conversationId) {
+              return conversation;
+            }
+
+            const filteredQueue = conversation.queuedMessages.filter(
+              (message) => message.id !== queuedMessageId,
+            );
+
+            const nextMessage: Message = {
+              id: messageId,
+              content: messageContent || "Message sent",
+              timestamp: formattedTimestamp,
+              isFromProspect: false,
+              isAiGenerated: true,
+            };
+
+            const updatedMessages = [...conversation.messages, nextMessage];
+
+            return {
+              ...conversation,
+              messages: updatedMessages,
+              queuedMessages: filteredQueue,
+              prospect: {
+                ...conversation.prospect,
+                lastMessage: nextMessage.content,
+                lastMessageTime: formatRelativeTime(timestampRaw),
+                isUnread: false,
+              },
+            };
+          }),
+        );
+
+        await refreshConversations({ silent: true });
+      } catch (err) {
+        console.error("Failed to send queued message immediately", err);
+        setError(err instanceof Error ? err.message : "Failed to send queued message.");
+      } finally {
+        setQueueSendBusyIds((prev) => prev.filter((id) => id !== queuedMessageId));
+      }
+    },
+    [authorizedFetch, refreshConversations, setConversations, setError],
+  );
+
+  const handleSendMessage = useCallback(
+    async (conversationId: string, content: string) => {
+      const trimmed = content.trim();
+      if (!conversationId || !trimmed) {
+        return;
+      }
+
+      try {
+        const response = await authorizedFetch(CONVERSATION_ENDPOINTS.sendMessage(conversationId), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ message: trimmed }),
+        });
+
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          const message =
+            payload &&
+            typeof payload === "object" &&
+            payload !== null &&
+            "message" in payload &&
+            typeof (payload as { message?: unknown }).message === "string"
+              ? ((payload as { message?: string }).message as string)
+              : "Failed to send message.";
+          throw new Error(message);
+        }
+
+        const payloadMessageRaw =
+          payload && typeof payload === "object" && "message" in payload
+            ? (payload as { message?: unknown }).message
+            : null;
+
+        const payloadMessage =
+          payloadMessageRaw && typeof payloadMessageRaw === "object"
+            ? (payloadMessageRaw as {
+                timestamp?: string;
+                metadata?: { id?: string; mid?: string } & Record<string, unknown>;
+                id?: string;
+              })
+            : null;
+
+        const timestampInput =
+          (payloadMessage && typeof payloadMessage.timestamp === "string"
+            ? payloadMessage.timestamp
+            : new Date().toISOString());
+
+        const remoteMessageId =
+          payloadMessage && typeof payloadMessage.id === "string" && payloadMessage.id.length > 0
+            ? payloadMessage.id
+            : null;
+        const remoteMetadataMid =
+          payloadMessage &&
+          payloadMessage.metadata &&
+          typeof payloadMessage.metadata.mid === "string" &&
+          payloadMessage.metadata.mid.length > 0
+            ? (payloadMessage.metadata.mid as string)
+            : null;
+        const resolvedMessageId = remoteMessageId || remoteMetadataMid || `${conversationId}-${Date.now()}`;
+
+        const formattedTimestamp = formatMessageTimestamp(timestampInput);
+        const newMessage: Message = {
+          id: resolvedMessageId,
+          content: trimmed,
+          timestamp: formattedTimestamp,
+          isFromProspect: false,
+          isAiGenerated: false,
+        };
+
+        setConversations((prev) =>
+          prev.map((conversation) => {
+            if (conversation.id !== conversationId) {
+              return conversation;
+            }
+
+            const updatedMessages = [...conversation.messages, newMessage];
+            return {
+              ...conversation,
+              messages: updatedMessages,
+              prospect: {
+                ...conversation.prospect,
+                lastMessage: trimmed,
+                lastMessageTime: formatRelativeTime(timestampInput),
+                isUnread: false,
+              },
+            };
+          }),
+        );
+      } catch (err) {
+        console.error("Failed to send message", err);
+        setError(err instanceof Error ? err.message : "Failed to send message.");
+        throw err;
+      }
+    },
+    [authorizedFetch, setConversations, setError],
+  );
+
   if (isLoading && conversations.length === 0) {
     return (
       <AppLayout>
@@ -609,7 +1102,7 @@ export default function Messages() {
               {error ?? "We'll start populating this inbox as soon as new Instagram DMs arrive."}
             </p>
           </div>
-          <Button onClick={refreshConversations} disabled={isLoading}>
+          <Button onClick={() => refreshConversations()} disabled={isLoading || isRefreshing}>
             Refresh
           </Button>
         </div>
@@ -624,14 +1117,30 @@ export default function Messages() {
           <div className="mx-4 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
             <div className="flex items-center justify-between gap-3">
               <span>{error}</span>
-              <Button variant="ghost" size="sm" onClick={refreshConversations}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => refreshConversations()}
+                disabled={isLoading || isRefreshing}
+              >
                 Retry
               </Button>
             </div>
           </div>
         )}
 
-        {isLoading && conversations.length > 0 && (
+        <div className="mx-4 mb-2 flex items-center justify-between text-xs text-muted-foreground">
+          <span>Automatic refresh</span>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={autoRefreshEnabled}
+              onCheckedChange={setAutoRefreshEnabled}
+            />
+            <span>{autoRefreshEnabled ? "On" : "Off"}</span>
+          </div>
+        </div>
+
+        {(isLoading || isRefreshing) && conversations.length > 0 && (
           <div className="mx-4 mb-2 text-xs text-muted-foreground">Refreshing conversations…</div>
         )}
 
@@ -647,17 +1156,25 @@ export default function Messages() {
             stageFilters={stageFilters}
           />
 
-          <ChatWindow conversation={selectedConversation ?? null} />
+          <ChatWindow
+            conversation={selectedConversation ?? null}
+            onSendMessage={handleSendMessage}
+          />
 
           <ProspectPanel
             prospect={selectedProspect}
             profile={selectedProfile}
-            aiNotes={selectedConversation?.aiNotes ?? []}
-            queuedMessage={selectedConversation?.queuedMessage}
+            aiNotes={currentAiNotes}
+            queuedMessages={selectedConversation?.queuedMessages ?? []}
+            onSendQueuedMessageNow={handleSendQueuedMessageNow}
+            onCancelQueuedMessage={handleCancelQueuedMessage}
             onToggleAutopilot={handleToggleAutopilot}
+            queueCancelBusyIds={queueCancelBusyIds}
+            queueSendBusyIds={queueSendBusyIds}
             autopilotUpdating={
               Boolean(selectedProspect && autopilotBusyConversationId === selectedProspect.id)
             }
+            aiNotesLoading={aiNotesLoading}
           />
         </div>
       </div>

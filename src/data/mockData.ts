@@ -167,10 +167,14 @@ export const mockConversation: Conversation = {
     "Engaged and responsive - high conversion potential",
     "Best time to call: weekday evenings",
   ],
-  queuedMessage: {
-    content: "What country are you based in and what's your age?",
-    sendsIn: 76, // seconds
-  },
+  queuedMessages: [
+    {
+      id: "queued-1",
+      content: "What country are you based in and what's your age?",
+      scheduledFor: "2024-08-01T12:00:00.000Z",
+      sendsIn: 76,
+    },
+  ],
 };
 
 export const mockDashboardStats: DashboardStats = {

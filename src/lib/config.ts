@@ -10,6 +10,12 @@ export const AUTH_ENDPOINTS = {
 export const CONVERSATION_ENDPOINTS = {
   list: `${API_BASE_URL}/conversations`,
   autopilot: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}/autopilot`,
+  sendMessage: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}/messages`,
+  notes: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}/notes`,
+  sendQueuedMessageNow: (conversationId: string, queuedMessageId: string) =>
+    `${API_BASE_URL}/conversations/${conversationId}/queue/${queuedMessageId}/send-now`,
+  cancelQueuedMessage: (conversationId: string, queuedMessageId: string) =>
+    `${API_BASE_URL}/conversations/${conversationId}/queue/${queuedMessageId}`,
 };
 
 export const USER_ENDPOINTS = {

@@ -1,4 +1,4 @@
-import { Prospect, InstagramUserProfile } from "@/types";
+import { Prospect, InstagramUserProfile, QueuedMessage } from "@/types";
 import { StageBadge } from "@/components/StageBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,14 @@ interface ProspectPanelProps {
   prospect: Prospect | null;
   profile?: InstagramUserProfile | null;
   aiNotes: string[];
-  queuedMessage?: {
-    content: string;
-    sendsIn: number;
-  };
+  queuedMessages: QueuedMessage[];
   onToggleAutopilot?: (conversationId: string, enabled: boolean) => void | Promise<void>;
+  onCancelQueuedMessage?: (conversationId: string, queuedMessageId: string) => void | Promise<void>;
+  onSendQueuedMessageNow?: (conversationId: string, queuedMessageId: string) => void | Promise<void>;
   autopilotUpdating?: boolean;
+  aiNotesLoading?: boolean;
+  queueCancelBusyIds?: string[];
+  queueSendBusyIds?: string[];
 }
 
 const formatCount = (value?: number | null) => {
@@ -28,22 +30,81 @@ export function ProspectPanel({
   prospect,
   profile,
   aiNotes,
-  queuedMessage,
+  queuedMessages = [],
   onToggleAutopilot,
+  onCancelQueuedMessage,
+  onSendQueuedMessageNow,
   autopilotUpdating = false,
+  aiNotesLoading = false,
+  queueCancelBusyIds = [],
+  queueSendBusyIds = [],
 }: ProspectPanelProps) {
-  const [countdown, setCountdown] = useState(queuedMessage?.sendsIn || 0);
+  const [countdowns, setCountdowns] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    if (queuedMessage) {
-      setCountdown(queuedMessage.sendsIn);
-      const interval = setInterval(() => {
-        setCountdown((prev) => Math.max(0, prev - 1));
-      }, 1000);
-      return () => clearInterval(interval);
+    if (!queuedMessages.length) {
+      setCountdowns({});
+      return;
     }
-    setCountdown(0);
-  }, [queuedMessage]);
+
+    setCountdowns(
+      queuedMessages.reduce<Record<string, number>>((acc, message) => {
+        acc[message.id] = message.sendsIn;
+        return acc;
+      }, {}),
+    );
+
+    const interval = setInterval(() => {
+      setCountdowns((prev) => {
+        const next: Record<string, number> = {};
+        queuedMessages.forEach((message) => {
+          const previous = prev[message.id];
+          next[message.id] = typeof previous === "number"
+            ? Math.max(0, previous - 1)
+            : Math.max(0, message.sendsIn - 1);
+        });
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [queuedMessages]);
+
+  const formatScheduledLabel = (scheduledFor: string | null) => {
+    if (!scheduledFor) {
+      return "Awaiting send";
+    }
+
+    const parsed = new Date(scheduledFor);
+    if (Number.isNaN(parsed.getTime())) {
+      return "Awaiting send";
+    }
+
+    return parsed.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const handleCancelQueued = (queuedMessageId: string) => {
+    if (!prospect || !onCancelQueuedMessage) {
+      return;
+    }
+
+    onCancelQueuedMessage(prospect.id, queuedMessageId);
+  };
+
+  const handleSendQueuedNow = (queuedMessageId: string) => {
+    if (!prospect || !onSendQueuedMessageNow) {
+      return;
+    }
+
+    onSendQueuedMessageNow(prospect.id, queuedMessageId);
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -151,42 +212,101 @@ export function ProspectPanel({
       <div className="border-b border-border p-4">
         <h4 className="mb-3 font-medium text-foreground">AI Notes</h4>
         <div className="space-y-2 rounded-lg bg-secondary/30 p-3">
-          {aiNotes.length === 0 ? (
+          {aiNotesLoading && (
+            <p className="text-xs text-muted-foreground">
+              {aiNotes.length ? "Refreshing AI notes..." : "Generating AI notes..."}
+            </p>
+          )}
+          {aiNotes.length === 0 && !aiNotesLoading ? (
             <p className="text-xs text-muted-foreground">No AI notes yet.</p>
-          ) : (
-            aiNotes.map((note, index) => (
-              <p key={index} className="text-xs text-muted-foreground">
-                • {note}
-              </p>
-            ))
+          ) : null}
+          {aiNotes.length > 0 && (
+            <ul className="space-y-1">
+              {aiNotes.map((note, index) => (
+                <li key={index} className="text-xs text-muted-foreground">
+                  • {note}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>
 
-      {/* Queued Message */}
-      {queuedMessage && (
-        <div className="p-4">
-          <div className="rounded-lg bg-primary/5 border border-primary/20 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-primary uppercase tracking-wide">Queued</span>
-              <span className="text-xs text-muted-foreground">
-                Sends in {formatTime(countdown)}
-              </span>
-            </div>
-            <div className="rounded-lg bg-primary text-primary-foreground p-3 mb-3">
-              <p className="text-sm">{queuedMessage.content}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" className="flex-1">
-                Send now
-              </Button>
-              <Button size="sm" variant="outline" className="flex-1">
-                Cancel
-              </Button>
-            </div>
-          </div>
+      {/* Queued Messages */}
+      <div className="border-b border-border p-4">
+        <div className="flex items-center justify-between">
+          <h4 className="font-medium text-foreground">Queued Messages</h4>
+          <span className="text-xs text-muted-foreground">{queuedMessages.length}</span>
         </div>
-      )}
+        {queuedMessages.length === 0 ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Autopilot has no pending replies for this conversation.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {queuedMessages.map((message) => {
+              const countdown =
+                typeof countdowns[message.id] === "number"
+                  ? countdowns[message.id]
+                  : message.sendsIn;
+              const isCancelling = queueCancelBusyIds.includes(message.id);
+              const isSendingNow = queueSendBusyIds.includes(message.id);
+
+              return (
+                <div
+                  key={message.id}
+                  className="rounded-lg border border-primary/20 bg-primary/5 p-3"
+                >
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="font-semibold uppercase tracking-wide text-primary">
+                      Autopilot queued
+                    </span>
+                    <span>Sends in {formatTime(Math.max(0, countdown))}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-foreground">{message.content}</p>
+                  <div className="mt-2 text-[11px] text-muted-foreground">
+                    {formatScheduledLabel(message.scheduledFor)}
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      disabled={
+                        !prospect ||
+                        !onSendQueuedMessageNow ||
+                        isSendingNow ||
+                        isCancelling
+                      }
+                      onClick={() => handleSendQueuedNow(message.id)}
+                    >
+                      {isSendingNow ? "Sending..." : "Send now"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full"
+                      disabled={
+                        !prospect ||
+                        !onCancelQueuedMessage ||
+                        isCancelling ||
+                        isSendingNow
+                      }
+                      onClick={() => handleCancelQueued(message.id)}
+                    >
+                      {isCancelling ? "Cancelling..." : "Cancel & turn off autopilot"}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {queuedMessages.length > 0 && (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Canceling removes the response from the queue and disables autopilot for this lead.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
