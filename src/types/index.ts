@@ -2,6 +2,7 @@ export type FunnelStage =
   | 'responded'
   | 'lead'
   | 'qualified'
+  | 'booking-sent'
   | 'call-booked'
   | 'sale'
   | 'flagged';
@@ -120,6 +121,7 @@ export interface FunnelData {
   responded: number;
   lead: number;
   qualified: number;
+  bookingSent?: number;
   callBooked: number;
   sale: number;
 }

@@ -21,6 +21,7 @@ const filterLabels: Record<FunnelStage | 'all', string> = {
   responded: 'Responded',
   lead: 'Lead',
   qualified: 'Qualified',
+  'booking-sent': 'Booking Sent',
   'call-booked': 'Call Booked',
   sale: 'Sale',
   flagged: 'Flagged',

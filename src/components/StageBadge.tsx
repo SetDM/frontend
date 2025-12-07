@@ -19,6 +19,10 @@ const stageConfig: Record<FunnelStage, { label: string; className: string }> = {
     label: "Qualified",
     className: "bg-stage-qualified/15 text-stage-qualified",
   },
+  "booking-sent": {
+    label: "Booking Sent",
+    className: "bg-stage-booking-sent/15 text-stage-booking-sent",
+  },
   "call-booked": {
     label: "Call Booked",
     className: "bg-stage-call-booked/15 text-stage-call-booked",

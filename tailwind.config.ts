@@ -69,6 +69,7 @@ export default {
           responded: "hsl(var(--stage-responded))",
           lead: "hsl(var(--stage-lead))",
           qualified: "hsl(var(--stage-qualified))",
+          "booking-sent": "hsl(var(--stage-booking-sent))",
           "call-booked": "hsl(var(--stage-call-booked))",
           sale: "hsl(var(--stage-sale))",
           ignored: "hsl(var(--stage-ignored))",

@@ -16,6 +16,7 @@ export const CONVERSATION_ENDPOINTS = {
     `${API_BASE_URL}/conversations/${conversationId}/queue/${queuedMessageId}/send-now`,
   cancelQueuedMessage: (conversationId: string, queuedMessageId: string) =>
     `${API_BASE_URL}/conversations/${conversationId}/queue/${queuedMessageId}`,
+  clearFlag: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}/flag`,
 };
 
 export const USER_ENDPOINTS = {

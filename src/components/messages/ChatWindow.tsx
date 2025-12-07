@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MoreVertical, Plus, Send } from "lucide-react";
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 
 interface ChatWindowProps {
@@ -15,11 +15,27 @@ interface ChatWindowProps {
 export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const messageCount = conversation?.messages?.length ?? 0;
 
   useEffect(() => {
     setMessage("");
     setIsSending(false);
   }, [conversation?.id]);
+
+  useEffect(() => {
+    if (!conversation) {
+      return;
+    }
+
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  }, [conversation, messageCount]);
 
   const handleSend = async () => {
     if (!conversation || !onSendMessage) {
@@ -82,7 +98,7 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-auto p-4 space-y-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No messages yet.

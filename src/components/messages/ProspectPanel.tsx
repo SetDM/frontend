@@ -13,10 +13,13 @@ interface ProspectPanelProps {
   onToggleAutopilot?: (conversationId: string, enabled: boolean) => void | Promise<void>;
   onCancelQueuedMessage?: (conversationId: string, queuedMessageId: string) => void | Promise<void>;
   onSendQueuedMessageNow?: (conversationId: string, queuedMessageId: string) => void | Promise<void>;
+  onClearFlag?: (conversationId: string) => void | Promise<void>;
+  onRefreshAiNotes?: (conversationId: string) => void | Promise<void>;
   autopilotUpdating?: boolean;
   aiNotesLoading?: boolean;
   queueCancelBusyIds?: string[];
   queueSendBusyIds?: string[];
+  clearFlagBusyConversationId?: string | null;
 }
 
 const formatCount = (value?: number | null) => {
@@ -34,10 +37,13 @@ export function ProspectPanel({
   onToggleAutopilot,
   onCancelQueuedMessage,
   onSendQueuedMessageNow,
+  onClearFlag,
+  onRefreshAiNotes,
   autopilotUpdating = false,
   aiNotesLoading = false,
   queueCancelBusyIds = [],
   queueSendBusyIds = [],
+  clearFlagBusyConversationId = null,
 }: ProspectPanelProps) {
   const [countdowns, setCountdowns] = useState<Record<string, number>>({});
 
@@ -106,6 +112,14 @@ export function ProspectPanel({
     onSendQueuedMessageNow(prospect.id, queuedMessageId);
   };
 
+  const handleClearFlag = () => {
+    if (!prospect || !onClearFlag) {
+      return;
+    }
+
+    onClearFlag(prospect.id);
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -135,6 +149,7 @@ export function ProspectPanel({
     .slice(0, 2)
     .toUpperCase() || "IG";
   const avatarSrc = profile?.profilePic || prospect.profilePic || prospect.avatar;
+  const isClearingFlag = clearFlagBusyConversationId === prospect.id;
 
   return (
     <div className="flex h-full w-80 flex-col overflow-auto border-l border-border bg-card">
@@ -181,12 +196,25 @@ export function ProspectPanel({
             <StageBadge stage={prospect.stage} />
           </div>
 
+          {prospect.isFlagged && (
+            <div className="mt-4 w-full">
+              <Button
+                variant="destructive"
+                className="w-full"
+                disabled={!onClearFlag || isClearingFlag}
+                onClick={handleClearFlag}
+              >
+                {isClearingFlag ? "Removing flag..." : "Remove flag"}
+              </Button>
+            </div>
+          )}
+
           <div className="mt-4 flex w-full items-center justify-between rounded-lg bg-secondary/50 px-3 py-2">
             <span className="text-sm text-muted-foreground">Autopilot</span>
             <div className="flex items-center gap-2">
               <Switch
                 checked={prospect.autopilotEnabled}
-                disabled={autopilotUpdating}
+                disabled={autopilotUpdating || prospect.isFlagged}
                 onCheckedChange={(checked) => onToggleAutopilot?.(prospect.id, checked)}
               />
               {autopilotUpdating && (
@@ -194,6 +222,11 @@ export function ProspectPanel({
               )}
             </div>
           </div>
+          {prospect.isFlagged && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Remove the flag to re-enable autopilot.
+            </p>
+          )}
         </div>
       </div>
 
@@ -211,6 +244,17 @@ export function ProspectPanel({
       {/* AI Notes */}
       <div className="border-b border-border p-4">
         <h4 className="mb-3 font-medium text-foreground">AI Notes</h4>
+          {prospect && onRefreshAiNotes && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="mb-2 w-full"
+              disabled={aiNotesLoading}
+              onClick={() => onRefreshAiNotes(prospect.id)}
+            >
+              {aiNotesLoading ? "Updating notes..." : "Refresh AI notes"}
+            </Button>
+          )}
         <div className="space-y-2 rounded-lg bg-secondary/30 p-3">
           {aiNotesLoading && (
             <p className="text-xs text-muted-foreground">
@@ -293,7 +337,7 @@ export function ProspectPanel({
                       }
                       onClick={() => handleCancelQueued(message.id)}
                     >
-                      {isCancelling ? "Cancelling..." : "Cancel & turn off autopilot"}
+                      {isCancelling ? "Cancelling..." : "Cancel queued message"}
                     </Button>
                   </div>
                 </div>
@@ -303,7 +347,7 @@ export function ProspectPanel({
         )}
         {queuedMessages.length > 0 && (
           <p className="mt-3 text-[11px] text-muted-foreground">
-            Canceling removes the response from the queue and disables autopilot for this lead.
+            Canceling removes the response from the queue.
           </p>
         )}
       </div>

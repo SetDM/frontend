@@ -22,6 +22,7 @@ const FUNNEL_STAGES: FunnelStage[] = [
   "responded",
   "lead",
   "qualified",
+  "booking-sent",
   "call-booked",
   "sale",
   "flagged",
@@ -403,7 +404,60 @@ export default function Messages() {
   );
   const [queueCancelBusyIds, setQueueCancelBusyIds] = useState<string[]>([]);
   const [queueSendBusyIds, setQueueSendBusyIds] = useState<string[]>([]);
+  const [clearFlagBusyConversationId, setClearFlagBusyConversationId] = useState<string | null>(
+    null,
+  );
   const refreshInFlightRef = useRef(false);
+
+  const fetchAiNotesForConversation = useCallback(
+    async (conversationId: string, options?: { signal?: AbortSignal }) => {
+      if (!conversationId) {
+        return;
+      }
+
+      const abortSignal = options?.signal;
+      setAiNotesRequestConversationId(conversationId);
+
+      try {
+        const response = await authorizedFetch(CONVERSATION_ENDPOINTS.notes(conversationId), {
+          signal: abortSignal,
+        });
+
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          const message =
+            payload &&
+            typeof payload === "object" &&
+            payload !== null &&
+            "message" in payload &&
+            typeof (payload as { message?: unknown }).message === "string"
+              ? ((payload as { message?: string }).message as string)
+              : "Failed to load AI notes.";
+          throw new Error(message);
+        }
+
+        const notes = extractNotesFromPayload(payload);
+        setAiNotesByConversationId((prev) => ({ ...prev, [conversationId]: notes }));
+      } catch (err) {
+        if (!abortSignal?.aborted) {
+          console.error("Failed to fetch AI notes", err);
+        }
+      } finally {
+        if (!abortSignal?.aborted) {
+          setAiNotesRequestConversationId((current) =>
+            current === conversationId ? null : current,
+          );
+        }
+      }
+    },
+    [authorizedFetch],
+  );
 
   const fetchProfilesForRecords = useCallback(
     async (records: ConversationRecord[], signal?: AbortSignal) => {
@@ -658,55 +712,12 @@ export default function Messages() {
     }
 
     const abortController = new AbortController();
-    const targetConversationId = selectedConversationId;
-
-    setAiNotesRequestConversationId(targetConversationId);
-
-    const fetchNotes = async () => {
-      try {
-        const response = await authorizedFetch(
-          CONVERSATION_ENDPOINTS.notes(targetConversationId),
-          { signal: abortController.signal },
-        );
-
-        let payload: unknown = null;
-        try {
-          payload = await response.json();
-        } catch {
-          payload = null;
-        }
-
-        if (!response.ok) {
-          const message =
-            payload &&
-            typeof payload === "object" &&
-            payload !== null &&
-            "message" in payload &&
-            typeof (payload as { message?: unknown }).message === "string"
-              ? ((payload as { message?: string }).message as string)
-              : "Failed to load AI notes.";
-          throw new Error(message);
-        }
-
-        const notes = extractNotesFromPayload(payload);
-        setAiNotesByConversationId((prev) => ({ ...prev, [targetConversationId]: notes }));
-      } catch (err) {
-        if (!abortController.signal.aborted) {
-          console.error("Failed to fetch AI notes", err);
-        }
-      } finally {
-        setAiNotesRequestConversationId((current) =>
-          current === targetConversationId ? null : current,
-        );
-      }
-    };
-
-    fetchNotes();
+    fetchAiNotesForConversation(selectedConversationId, { signal: abortController.signal });
 
     return () => {
       abortController.abort();
     };
-  }, [authorizedFetch, selectedConversationId]);
+  }, [fetchAiNotesForConversation, selectedConversationId]);
 
   const selectedConversation = useMemo(() => {
     if (!selectedConversationId) {
@@ -847,10 +858,6 @@ export default function Messages() {
               queuedMessages: conversation.queuedMessages.filter(
                 (message) => message.id !== queuedMessageId,
               ),
-              prospect: {
-                ...conversation.prospect,
-                autopilotEnabled: false,
-              },
             };
           }),
         );
@@ -973,6 +980,86 @@ export default function Messages() {
         setError(err instanceof Error ? err.message : "Failed to send queued message.");
       } finally {
         setQueueSendBusyIds((prev) => prev.filter((id) => id !== queuedMessageId));
+      }
+    },
+    [authorizedFetch, refreshConversations, setConversations, setError],
+  );
+
+  const handleRefreshAiNotes = useCallback(
+    (conversationId: string) => {
+      fetchAiNotesForConversation(conversationId);
+    },
+    [fetchAiNotesForConversation],
+  );
+
+  const handleClearFlag = useCallback(
+    async (conversationId: string) => {
+      if (!conversationId) {
+        return;
+      }
+
+      setClearFlagBusyConversationId(conversationId);
+
+      try {
+        const response = await authorizedFetch(CONVERSATION_ENDPOINTS.clearFlag(conversationId), {
+          method: "DELETE",
+        });
+
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          const message =
+            payload &&
+            typeof payload === "object" &&
+            payload !== null &&
+            "message" in payload &&
+            typeof (payload as { message?: unknown }).message === "string"
+              ? ((payload as { message?: string }).message as string)
+              : "Failed to clear flag.";
+          throw new Error(message);
+        }
+
+        const responseData =
+          payload && typeof payload === "object"
+            ? (payload as { stageTag?: unknown })
+            : null;
+        const stageTag =
+          typeof responseData?.stageTag === "string" ? responseData.stageTag : null;
+        const normalizedStage = normalizeStageTag(stageTag);
+
+        setConversations((prev) =>
+          prev.map((conversation) => {
+            if (conversation.id !== conversationId) {
+              return conversation;
+            }
+
+            return {
+              ...conversation,
+              prospect: {
+                ...conversation.prospect,
+                isFlagged: false,
+                stage:
+                  conversation.prospect.stage === "flagged"
+                    ? normalizedStage
+                    : conversation.prospect.stage,
+              },
+            };
+          }),
+        );
+
+        await refreshConversations({ silent: true });
+      } catch (err) {
+        console.error("Failed to clear conversation flag", err);
+        setError(err instanceof Error ? err.message : "Failed to clear flag.");
+      } finally {
+        setClearFlagBusyConversationId((current) =>
+          current === conversationId ? null : current,
+        );
       }
     },
     [authorizedFetch, refreshConversations, setConversations, setError],
@@ -1169,8 +1256,11 @@ export default function Messages() {
             onSendQueuedMessageNow={handleSendQueuedMessageNow}
             onCancelQueuedMessage={handleCancelQueuedMessage}
             onToggleAutopilot={handleToggleAutopilot}
+            onRefreshAiNotes={handleRefreshAiNotes}
             queueCancelBusyIds={queueCancelBusyIds}
             queueSendBusyIds={queueSendBusyIds}
+            onClearFlag={handleClearFlag}
+            clearFlagBusyConversationId={clearFlagBusyConversationId}
             autopilotUpdating={
               Boolean(selectedProspect && autopilotBusyConversationId === selectedProspect.id)
             }
