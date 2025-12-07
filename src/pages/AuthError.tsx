@@ -3,10 +3,12 @@ import { useLocation } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function AuthError() {
   const location = useLocation();
   const { redirectToLogin } = useAuth();
+  usePageTitle("Authentication Error");
 
   const message = useMemo(() => {
     const params = new URLSearchParams(location.search);

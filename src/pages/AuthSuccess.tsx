@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function AuthSuccess() {
   const { refreshUser } = useAuth();
   const navigate = useNavigate();
+  usePageTitle("Signing In");
 
   useEffect(() => {
     let isMounted = true;

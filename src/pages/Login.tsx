@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function Login() {
   const { redirectToLogin, user, isLoading, error, clearError } = useAuth();
   const navigate = useNavigate();
+  usePageTitle("Login");
 
   useEffect(() => {
     if (!isLoading && user) {

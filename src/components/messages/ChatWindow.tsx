@@ -3,19 +3,27 @@ import { StageBadge } from "@/components/StageBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MoreVertical, Plus, Send } from "lucide-react";
+import { Loader2, MoreVertical, Plus, Send } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 
 interface ChatWindowProps {
   conversation: Conversation | null;
   onSendMessage?: (conversationId: string, content: string) => Promise<void> | void;
+  onLoadOlderMessages?: (conversationId: string) => Promise<void> | void;
+  isLoadingOlderMessages?: boolean;
 }
 
-export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
+export function ChatWindow({
+  conversation,
+  onSendMessage,
+  onLoadOlderMessages,
+  isLoadingOlderMessages = false,
+}: ChatWindowProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const pendingOlderScrollAdjustmentRef = useRef<{ distanceFromBottom: number } | null>(null);
 
   const messageCount = conversation?.messages?.length ?? 0;
 
@@ -31,6 +39,16 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
 
     const container = messagesContainerRef.current;
     if (!container) {
+      return;
+    }
+
+    const pendingAdjustment = pendingOlderScrollAdjustmentRef.current;
+    if (pendingAdjustment) {
+      requestAnimationFrame(() => {
+        const nextScrollTop = container.scrollHeight - pendingAdjustment.distanceFromBottom;
+        container.scrollTo({ top: Math.max(nextScrollTop, 0) });
+      });
+      pendingOlderScrollAdjustmentRef.current = null;
       return;
     }
 
@@ -62,6 +80,27 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       await handleSend();
+    }
+  };
+
+  const handleLoadMoreMessages = async () => {
+    if (!conversation || !onLoadOlderMessages) {
+      return;
+    }
+
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const distanceFromBottom = container.scrollHeight - container.scrollTop;
+    pendingOlderScrollAdjustmentRef.current = { distanceFromBottom };
+
+    try {
+      await onLoadOlderMessages(conversation.id);
+    } catch (error) {
+      console.error("Failed to load older messages", error);
+      pendingOlderScrollAdjustmentRef.current = null;
     }
   };
 
@@ -99,6 +138,26 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
 
       {/* Messages */}
       <div ref={messagesContainerRef} className="flex-1 overflow-auto p-4 space-y-4">
+        {conversation.hasMoreMessages ? (
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isLoadingOlderMessages || !onLoadOlderMessages}
+              onClick={handleLoadMoreMessages}
+              className="text-xs"
+            >
+              {isLoadingOlderMessages ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  Loading messages...
+                </span>
+              ) : (
+                "Load previous messages"
+              )}
+            </Button>
+          </div>
+        ) : null}
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No messages yet.

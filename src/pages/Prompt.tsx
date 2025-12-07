@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { Send, Plus, Upload, X, Sparkles } from "lucide-react";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 interface TestMessage {
   id: string;
@@ -15,6 +16,7 @@ interface TestMessage {
 }
 
 export default function Prompt() {
+  usePageTitle("Prompt");
   const [coachName, setCoachName] = useState("Iris");
   const [description, setDescription] = useState("A friendly fitness coach who helps prospects discover if they're a good fit for transformation coaching.");
   const [instructions, setInstructions] = useState(`You are acting as ${coachName || "the coach"} responding to Instagram DMs. Your goal is to qualify leads for high-ticket fitness coaching.

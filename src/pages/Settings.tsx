@@ -17,8 +17,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function Settings() {
+  usePageTitle("Settings");
   const [coachName, setCoachName] = useState("Iris");
   const [brandName, setBrandName] = useState("FitWithIris");
   const [calendarLink, setCalendarLink] = useState("");

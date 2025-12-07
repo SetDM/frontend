@@ -52,6 +52,8 @@ export interface Conversation {
   messages: Message[];
   aiNotes: string[];
   queuedMessages: QueuedMessage[];
+  hasMoreMessages?: boolean;
+  loadedMessageLimit?: number | null;
 }
 
 export interface ConversationMessageRecord {

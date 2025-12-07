@@ -7,6 +7,7 @@ import { ProspectPanel } from "@/components/messages/ProspectPanel";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { CONVERSATION_ENDPOINTS, USER_ENDPOINTS } from "@/lib/config";
 import type {
   Conversation,
@@ -28,9 +29,15 @@ const FUNNEL_STAGES: FunnelStage[] = [
   "flagged",
 ];
 
+const PROFILE_REQUEST_CACHE_MODE: RequestCache = "no-store";
+
 const stageFilters: (FunnelStage | "all")[] = ["all", ...FUNNEL_STAGES];
 
 const CONVERSATION_REFRESH_INTERVAL_MS = 5000; // 5s polling cadence for new data
+const CONVERSATIONS_PAGE_SIZE = 7;
+const CONVERSATION_MESSAGE_PAGE_SIZE = 50;
+const INITIAL_CONVERSATION_MESSAGE_LIMIT = CONVERSATION_MESSAGE_PAGE_SIZE;
+const MAX_CONVERSATION_MESSAGE_LIMIT = 500;
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
@@ -136,17 +143,21 @@ const normalizeStageTag = (stageTag?: string | null): FunnelStage => {
     return "responded";
   }
 
-  const normalized = stageTag.trim().toLowerCase();
+  const normalized = stageTag
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
   const aliasMap: Record<string, FunnelStage> = {
     flag: "flagged",
     flagged: "flagged",
+    sales: "sale",
   };
 
-  if (aliasMap[normalized]) {
-    return aliasMap[normalized];
-  }
+  const resolved = aliasMap[normalized] ?? normalized;
 
-  return FUNNEL_STAGES.find((stage) => stage === normalized) ?? "responded";
+  return FUNNEL_STAGES.find((stage) => stage === resolved) ?? "responded";
 };
 
 const resolveProspectStage = (record?: ConversationRecord): {
@@ -189,6 +200,13 @@ const deriveConversationId = (record: ConversationRecord) => {
 
 type MessageWithSort = Message & { sortValue: number };
 
+type LoadConversationPageArgs = {
+  limit: number;
+  skip: number;
+  stageTag?: FunnelStage | "all";
+  signal?: AbortSignal;
+};
+
 const buildProspectFromRecord = (
   record: ConversationRecord,
   conversationId: string,
@@ -197,18 +215,39 @@ const buildProspectFromRecord = (
   profile?: InstagramUserProfile | null,
 ): Prospect => {
   const metadata = record.metadata as Record<string, unknown> | undefined;
-  const instagramId = typeof record.senderId === "string" && record.senderId.length > 0
-    ? record.senderId
-    : "unknown";
-  const metadataName = getMetadataString(metadata, "prospectName") || instagramId;
-  const metadataHandle = getMetadataString(metadata, "prospectHandle") || instagramId;
-  const normalizedUsername = profile?.username
-    ? profile.username.replace(/^@+/, "").trim()
-    : undefined;
-  const handleSource = normalizedUsername && normalizedUsername.length > 0
-    ? normalizedUsername
-    : metadataHandle;
-  const normalizedHandle = handleSource.startsWith("@") ? handleSource : `@${handleSource}`;
+  const derivedSenderId = getSenderIdFromRecord(record);
+  const instagramId = derivedSenderId ?? "unknown";
+  const fallbackIdentity =
+    derivedSenderId ||
+    (typeof record.conversationId === "string" ? record.conversationId : null) ||
+    instagramId;
+  const metadataName = getMetadataString(metadata, "prospectName");
+  const metadataHandleRaw = getMetadataString(metadata, "prospectHandle");
+  const normalizedProfileUsername =
+    profile?.username && profile.username.trim().length > 0
+      ? profile.username.replace(/^@+/, "").trim()
+      : undefined;
+  const normalizedMetadataHandle =
+    metadataHandleRaw && metadataHandleRaw.length > 0
+      ? metadataHandleRaw.replace(/^@+/, "").trim()
+      : undefined;
+  const resolvedUsername = normalizedProfileUsername || normalizedMetadataHandle || null;
+  const handleSource = normalizedProfileUsername || normalizedMetadataHandle || fallbackIdentity;
+  const sanitizedHandleSource =
+    typeof handleSource === "string" ? handleSource.replace(/^@+/, "").trim() : "";
+  const resolvedHandleBase =
+    sanitizedHandleSource.length > 0 ? sanitizedHandleSource : fallbackIdentity;
+  const normalizedHandle = resolvedHandleBase.startsWith("@")
+    ? resolvedHandleBase
+    : `@${resolvedHandleBase}`;
+  const hasMeaningfulHandle = Boolean(normalizedProfileUsername || normalizedMetadataHandle);
+  const handleDisplayFallback = hasMeaningfulHandle ? normalizedHandle : null;
+  const resolvedDisplayName =
+    (profile?.name && profile.name.trim()) ||
+    resolvedUsername ||
+    metadataName ||
+    handleDisplayFallback ||
+    fallbackIdentity;
   const lastMessage = messages[messages.length - 1];
   const followerCount =
     typeof profile?.followerCount === "number" && Number.isFinite(profile.followerCount)
@@ -221,8 +260,8 @@ const buildProspectFromRecord = (
   return {
     id: conversationId,
     instagramId,
-    name: normalizedUsername || metadataName,
-    username: normalizedUsername || null,
+    name: resolvedDisplayName,
+    username: resolvedUsername,
     handle: normalizedHandle,
     avatar: profile?.profilePic || "",
     profilePic: profile?.profilePic || null,
@@ -244,9 +283,15 @@ const buildProspectFromRecord = (
 const buildConversationFromRecord = (
   record: ConversationRecord,
   profile?: InstagramUserProfile | null,
+  options?: { messageLimit?: number },
 ): Conversation => {
   const conversationId = deriveConversationId(record);
   const rawMessages = Array.isArray(record.messages) ? record.messages : [];
+  const requestedLimit =
+    typeof options?.messageLimit === "number" && Number.isFinite(options.messageLimit)
+      ? options.messageLimit
+      : null;
+  const hasMoreMessages = Boolean(requestedLimit && rawMessages.length >= requestedLimit);
   const queuedMessagesRaw = Array.isArray(record.queuedMessages) ? record.queuedMessages : [];
 
   const normalizedMessages: MessageWithSort[] = rawMessages.map((message, index) => {
@@ -324,6 +369,8 @@ const buildConversationFromRecord = (
     messages: orderedMessages,
     aiNotes: Array.isArray(record.aiNotes) ? record.aiNotes : [],
     queuedMessages,
+    hasMoreMessages,
+    loadedMessageLimit: requestedLimit,
   };
 };
 
@@ -341,6 +388,34 @@ const extractConversationRecords = (payload: unknown): ConversationRecord[] => {
   }
 
   return [];
+};
+
+const extractConversationRecord = (payload: unknown): ConversationRecord | null => {
+  const container = (payload as { data?: unknown })?.data ?? payload;
+
+  if (!container || typeof container !== "object") {
+    return null;
+  }
+
+  return container as ConversationRecord;
+};
+
+const getSenderIdFromRecord = (record: ConversationRecord): string | null => {
+  if (typeof record?.senderId === "string" && record.senderId.trim().length > 0) {
+    return record.senderId.trim();
+  }
+
+  if (typeof record?.conversationId === "string") {
+    const separatorIndex = record.conversationId.indexOf("_");
+    if (separatorIndex !== -1) {
+      const extracted = record.conversationId.slice(separatorIndex + 1).trim();
+      if (extracted.length > 0) {
+        return extracted;
+      }
+    }
+  }
+
+  return null;
 };
 
 const extractUserProfile = (payload: unknown): InstagramUserProfile | null => {
@@ -382,6 +457,7 @@ const extractUserProfile = (payload: unknown): InstagramUserProfile | null => {
 
 export default function Messages() {
   const { authorizedFetch } = useAuth();
+  usePageTitle("Messages");
   const [searchParams] = useSearchParams();
   const stageParam = (searchParams.get("stage") as FunnelStage | "all") || "all";
   const initialStage = stageFilters.includes(stageParam) ? stageParam : "all";
@@ -389,6 +465,10 @@ export default function Messages() {
   const [selectedFilter, setSelectedFilter] = useState<FunnelStage | "all">(initialStage);
   const [searchQuery, setSearchQuery] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationMessageLimits, setConversationMessageLimits] = useState<Record<string, number>>({});
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
+  const [isFetchingMoreConversations, setIsFetchingMoreConversations] = useState(false);
+  const [hydratedConversationIds, setHydratedConversationIds] = useState<Record<string, boolean>>({});
   const [profilesById, setProfilesById] = useState<Record<string, InstagramUserProfile>>({});
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -407,7 +487,46 @@ export default function Messages() {
   const [clearFlagBusyConversationId, setClearFlagBusyConversationId] = useState<string | null>(
     null,
   );
+  const [loadingOlderMessageIds, setLoadingOlderMessageIds] = useState<string[]>([]);
+  const profilesByIdRef = useRef<Record<string, InstagramUserProfile>>({});
+  const hydratedConversationIdsRef = useRef<Record<string, boolean>>({});
+  const conversationsRef = useRef<Conversation[]>([]);
+  const detailRequestInFlightRef = useRef<Record<string, boolean>>({});
   const refreshInFlightRef = useRef(false);
+
+  const getConversationMessageLimit = useCallback(
+    (conversationId: string | null) => {
+      if (!conversationId) {
+        return INITIAL_CONVERSATION_MESSAGE_LIMIT;
+      }
+      return conversationMessageLimits[conversationId] ?? INITIAL_CONVERSATION_MESSAGE_LIMIT;
+    },
+    [conversationMessageLimits],
+  );
+
+  const ensureConversationMessageLimit = useCallback((conversationId: string) => {
+    setConversationMessageLimits((prev) => {
+      if (prev[conversationId]) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [conversationId]: INITIAL_CONVERSATION_MESSAGE_LIMIT,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    profilesByIdRef.current = profilesById;
+  }, [profilesById]);
+
+  useEffect(() => {
+    hydratedConversationIdsRef.current = hydratedConversationIds;
+  }, [hydratedConversationIds]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   const fetchAiNotesForConversation = useCallback(
     async (conversationId: string, options?: { signal?: AbortSignal }) => {
@@ -464,7 +583,7 @@ export default function Messages() {
       const senderIds = Array.from(
         new Set(
           records
-            .map((record) => record.senderId)
+            .map((record) => getSenderIdFromRecord(record))
             .filter((id): id is string => typeof id === "string" && id.length > 0),
         ),
       );
@@ -475,7 +594,15 @@ export default function Messages() {
 
       const requests = senderIds.map(async (instagramId) => {
         try {
-          const response = await authorizedFetch(USER_ENDPOINTS.profile(instagramId), { signal });
+          const response = await authorizedFetch(USER_ENDPOINTS.profile(instagramId), {
+            signal,
+            cache: PROFILE_REQUEST_CACHE_MODE,
+          });
+
+          if (response.status === 304) {
+            const cachedProfile = profilesByIdRef.current[instagramId];
+            return cachedProfile ? ([instagramId, cachedProfile] as const) : null;
+          }
 
           if (!response.ok) {
             if (response.status === 404) {
@@ -516,9 +643,74 @@ export default function Messages() {
     [authorizedFetch],
   );
 
-  const loadConversations = useCallback(
-    async (signal?: AbortSignal) => {
-      const response = await authorizedFetch(CONVERSATION_ENDPOINTS.list, { signal });
+  const fetchProfileByInstagramId = useCallback(
+    async (instagramId: string, signal?: AbortSignal) => {
+      if (!instagramId) {
+        return null;
+      }
+
+      try {
+        const response = await authorizedFetch(USER_ENDPOINTS.profile(instagramId), {
+          signal,
+          cache: PROFILE_REQUEST_CACHE_MODE,
+        });
+
+        if (response.status === 304) {
+          return profilesByIdRef.current[instagramId] ?? null;
+        }
+
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (response.status === 404) {
+          setProfilesById((prev) => {
+            if (!(instagramId in prev)) {
+              return prev;
+            }
+            const next = { ...prev };
+            delete next[instagramId];
+            return next;
+          });
+          return null;
+        }
+
+        if (!response.ok) {
+          throw new Error(`Failed to refresh profile for ${instagramId}`);
+        }
+
+        const profile = extractUserProfile(payload);
+        if (profile) {
+          setProfilesById((prev) => ({ ...prev, [instagramId]: profile }));
+        }
+        return profile;
+      } catch (err) {
+        if (!(err instanceof Error && err.name === "AbortError")) {
+          console.error(`Failed to refresh Instagram profile for ${instagramId}`, err);
+        }
+        throw err;
+      }
+    },
+    [authorizedFetch],
+  );
+
+  const loadConversationPage = useCallback(
+    async ({ limit, skip, stageTag, signal }: LoadConversationPageArgs) => {
+      const normalizedLimit = Math.min(Math.max(Math.floor(limit), 1), 500);
+      const normalizedSkip = Math.max(Math.floor(skip), 0);
+
+      const listUrl = new URL(CONVERSATION_ENDPOINTS.list);
+      listUrl.searchParams.set("limit", String(normalizedLimit));
+      listUrl.searchParams.set("skip", String(normalizedSkip));
+      listUrl.searchParams.set("messageSlice", "last");
+      if (stageTag && stageTag !== "all") {
+        listUrl.searchParams.set("stage", stageTag);
+      }
+
+      const response = await authorizedFetch(listUrl.toString(), { signal });
 
       let payload: unknown = null;
       try {
@@ -559,37 +751,96 @@ export default function Messages() {
           }
         }
 
-        const instagramId = typeof record.senderId === "string" ? record.senderId : "";
+        const instagramId = getSenderIdFromRecord(record);
         const profile = instagramId ? profiles[instagramId] : undefined;
         return buildConversationFromRecord(record, profile);
       });
 
-      return { conversations: items, profiles, aiNotesMap };
+      return { conversations: items, profiles, aiNotesMap, fetchedCount: records.length };
     },
     [authorizedFetch, fetchProfilesForRecords],
+  );
+
+  const mergeFetchedConversations = useCallback(
+    (incoming: Conversation[], mode: "replace" | "append") => {
+      setConversations((prev) => {
+        const prevMap = new Map(prev.map((conversation) => [conversation.id, conversation]));
+
+        const mergeWithHydratedData = (
+          fresh: Conversation,
+          existing: Conversation,
+        ): Conversation => ({
+          ...fresh,
+          messages: existing.messages,
+          queuedMessages: existing.queuedMessages,
+          aiNotes: existing.aiNotes,
+          hasMoreMessages: existing.hasMoreMessages,
+          loadedMessageLimit: existing.loadedMessageLimit,
+        });
+
+        if (mode === "replace") {
+          return incoming.map((conversation) => {
+            const existing = prevMap.get(conversation.id);
+            if (existing && hydratedConversationIdsRef.current[conversation.id]) {
+              return mergeWithHydratedData(conversation, existing);
+            }
+            return conversation;
+          });
+        }
+
+        const next = [...prev];
+        incoming.forEach((conversation) => {
+          const index = next.findIndex((item) => item.id === conversation.id);
+          if (index === -1) {
+            next.push(conversation);
+            return;
+          }
+
+          const existing = next[index];
+          next[index] = hydratedConversationIdsRef.current[conversation.id]
+            ? mergeWithHydratedData(conversation, existing)
+            : conversation;
+        });
+        return next;
+      });
+    },
+    [],
   );
 
   useEffect(() => {
     const abortController = new AbortController();
     let mounted = true;
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
+    setHydratedConversationIds({});
+    setConversations([]);
+    setHasMoreConversations(true);
+    setError(null);
+    setIsLoading(true);
 
+    const fetchData = async () => {
       try {
         const {
           conversations: items,
           profiles,
           aiNotesMap,
-        } = await loadConversations(abortController.signal);
-        if (mounted) {
-          setConversations(items);
-          setProfilesById((prev) => ({ ...prev, ...profiles }));
-          if (aiNotesMap && Object.keys(aiNotesMap).length > 0) {
-            setAiNotesByConversationId((prev) => ({ ...prev, ...aiNotesMap }));
-          }
+          fetchedCount,
+        } = await loadConversationPage({
+          limit: CONVERSATIONS_PAGE_SIZE,
+          skip: 0,
+          stageTag: selectedFilter,
+          signal: abortController.signal,
+        });
+
+        if (!mounted) {
+          return;
         }
+
+        mergeFetchedConversations(items, "replace");
+        setProfilesById((prev) => ({ ...prev, ...profiles }));
+        if (aiNotesMap && Object.keys(aiNotesMap).length > 0) {
+          setAiNotesByConversationId((prev) => ({ ...prev, ...aiNotesMap }));
+        }
+        setHasMoreConversations(fetchedCount === CONVERSATIONS_PAGE_SIZE);
       } catch (err) {
         if (abortController.signal.aborted) {
           return;
@@ -610,54 +861,247 @@ export default function Messages() {
       mounted = false;
       abortController.abort();
     };
-  }, [loadConversations]);
+  }, [loadConversationPage, mergeFetchedConversations, selectedFilter]);
 
-  const refreshConversations = useCallback(async (options?: { silent?: boolean }) => {
-    if (refreshInFlightRef.current) {
-      return;
-    }
+  const refreshConversations = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (refreshInFlightRef.current) {
+        return;
+      }
 
-    const silent = Boolean(options?.silent);
-    refreshInFlightRef.current = true;
-    try {
-      setError(null);
-      if (silent) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
+      const silent = Boolean(options?.silent);
+      refreshInFlightRef.current = true;
+      try {
+        setError(null);
+        if (silent) {
+          setIsRefreshing(true);
+        } else {
+          setIsLoading(true);
+        }
+
+        const requestedLimit = Math.max(conversationsRef.current.length, CONVERSATIONS_PAGE_SIZE);
+        const normalizedLimit = Math.min(Math.max(requestedLimit, CONVERSATIONS_PAGE_SIZE), 500);
+
+        const {
+          conversations: items,
+          profiles,
+          aiNotesMap,
+          fetchedCount,
+        } = await loadConversationPage({
+          limit: normalizedLimit,
+          skip: 0,
+          stageTag: selectedFilter,
+        });
+
+        mergeFetchedConversations(items, "replace");
+        setProfilesById((prev) => ({ ...prev, ...profiles }));
+        if (aiNotesMap && Object.keys(aiNotesMap).length > 0) {
+          setAiNotesByConversationId((prev) => ({ ...prev, ...aiNotesMap }));
+        }
+        setHasMoreConversations(fetchedCount === normalizedLimit);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load conversations.");
+      } finally {
+        if (silent) {
+          setIsRefreshing(false);
+        } else {
+          setIsLoading(false);
+        }
+        refreshInFlightRef.current = false;
       }
-      const { conversations: items, profiles, aiNotesMap } = await loadConversations();
-      setConversations(items);
-      setProfilesById((prev) => ({ ...prev, ...profiles }));
-      if (aiNotesMap && Object.keys(aiNotesMap).length > 0) {
-        setAiNotesByConversationId((prev) => ({ ...prev, ...aiNotesMap }));
+    },
+    [loadConversationPage, mergeFetchedConversations, selectedFilter],
+  );
+
+  const hydrateConversationDetail = useCallback(
+    async (
+      conversationId: string,
+      options?: { signal?: AbortSignal; force?: boolean; messageLimit?: number },
+    ) => {
+      const force = Boolean(options?.force);
+      if (!conversationId) {
+        return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load conversations.");
-    } finally {
-      if (silent) {
-        setIsRefreshing(false);
-      } else {
-        setIsLoading(false);
+
+      if (!force && hydratedConversationIdsRef.current[conversationId]) {
+        return;
       }
-      refreshInFlightRef.current = false;
-    }
-  }, [loadConversations]);
+
+      if (detailRequestInFlightRef.current[conversationId]) {
+        return;
+      }
+
+      const requestedLimitRaw = options?.messageLimit ?? getConversationMessageLimit(conversationId);
+      const requestedLimit = Math.min(
+        Math.max(Math.floor(requestedLimitRaw) || INITIAL_CONVERSATION_MESSAGE_LIMIT, 1),
+        MAX_CONVERSATION_MESSAGE_LIMIT,
+      );
+
+      detailRequestInFlightRef.current[conversationId] = true;
+      const abortSignal = options?.signal;
+
+      try {
+        const detailUrl = new URL(CONVERSATION_ENDPOINTS.detail(conversationId));
+        detailUrl.searchParams.set("messageLimit", requestedLimit.toString());
+        detailUrl.searchParams.set("includeQueuedMessages", "true");
+
+        const response = await authorizedFetch(detailUrl.toString(), { signal: abortSignal });
+
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          const message =
+            payload &&
+            typeof payload === "object" &&
+            payload !== null &&
+            "message" in payload &&
+            typeof (payload as { message?: unknown }).message === "string"
+              ? ((payload as { message?: string }).message as string)
+              : "Failed to load conversation.";
+          throw new Error(message);
+        }
+
+        const record = extractConversationRecord(payload);
+        if (!record) {
+          throw new Error("Conversation not found.");
+        }
+
+        const senderId = getSenderIdFromRecord(record);
+
+        let profile = senderId ? profilesByIdRef.current[senderId] ?? null : null;
+        if (senderId && !profile) {
+          const fetchedProfiles = await fetchProfilesForRecords([record], abortSignal);
+          if (fetchedProfiles && Object.keys(fetchedProfiles).length > 0) {
+            profile = fetchedProfiles[senderId] ?? null;
+            setProfilesById((prev) => ({ ...prev, ...fetchedProfiles }));
+          }
+        }
+
+        const hydratedConversation = buildConversationFromRecord(record, profile || undefined, {
+          messageLimit: requestedLimit,
+        });
+        setConversations((prev) => {
+          const index = prev.findIndex((conversation) => conversation.id === hydratedConversation.id);
+          if (index === -1) {
+            return [hydratedConversation, ...prev];
+          }
+          const next = [...prev];
+          next[index] = hydratedConversation;
+          return next;
+        });
+
+        if (Array.isArray(record.aiNotes) && record.aiNotes.length > 0) {
+          const normalizedNotes = record.aiNotes
+            .map((note) => (typeof note === "string" ? note.trim() : ""))
+            .filter((note): note is string => Boolean(note));
+          if (normalizedNotes.length) {
+            setAiNotesByConversationId((prev) => ({
+              ...prev,
+              [hydratedConversation.id]: normalizedNotes,
+            }));
+          }
+        }
+
+        setHydratedConversationIds((prev) => ({ ...prev, [hydratedConversation.id]: true }));
+        setConversationMessageLimits((prev) => {
+          if (prev[hydratedConversation.id] === requestedLimit) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [hydratedConversation.id]: requestedLimit,
+          };
+        });
+      } catch (err) {
+        if (!(err instanceof Error && err.name === "AbortError")) {
+          console.error("Failed to load conversation detail", err);
+        }
+      } finally {
+        delete detailRequestInFlightRef.current[conversationId];
+      }
+    },
+    [
+      authorizedFetch,
+      fetchProfilesForRecords,
+      getConversationMessageLimit,
+    ],
+  );
+
+  const loadMoreConversations = useCallback(
+    async () => {
+      if (isLoading || isFetchingMoreConversations || !hasMoreConversations) {
+        return;
+      }
+
+      setIsFetchingMoreConversations(true);
+
+      try {
+        const {
+          conversations: items,
+          profiles,
+          aiNotesMap,
+          fetchedCount,
+        } = await loadConversationPage({
+          limit: CONVERSATIONS_PAGE_SIZE,
+          skip: conversationsRef.current.length,
+          stageTag: selectedFilter,
+        });
+
+        mergeFetchedConversations(items, "append");
+        setProfilesById((prev) => ({ ...prev, ...profiles }));
+        if (aiNotesMap && Object.keys(aiNotesMap).length > 0) {
+          setAiNotesByConversationId((prev) => ({ ...prev, ...aiNotesMap }));
+        }
+        setHasMoreConversations(fetchedCount === CONVERSATIONS_PAGE_SIZE);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load more conversations.");
+      } finally {
+        setIsFetchingMoreConversations(false);
+      }
+    },
+    [
+      hasMoreConversations,
+      isFetchingMoreConversations,
+      isLoading,
+      loadConversationPage,
+      mergeFetchedConversations,
+      selectedFilter,
+    ],
+  );
 
   useEffect(() => {
-    if (!autoRefreshEnabled) {
+    if (!selectedConversationId) {
       return undefined;
     }
 
-    const interval = setInterval(() => {
-      refreshConversations({ silent: true });
-    }, CONVERSATION_REFRESH_INTERVAL_MS);
+    ensureConversationMessageLimit(selectedConversationId);
+
+    if (hydratedConversationIds[selectedConversationId]) {
+      return undefined;
+    }
+
+    const abortController = new AbortController();
+    const requestedLimit = getConversationMessageLimit(selectedConversationId);
+    hydrateConversationDetail(selectedConversationId, {
+      signal: abortController.signal,
+      messageLimit: requestedLimit,
+    });
 
     return () => {
-      clearInterval(interval);
+      abortController.abort();
     };
-  }, [autoRefreshEnabled, refreshConversations]);
-
+  }, [
+    ensureConversationMessageLimit,
+    getConversationMessageLimit,
+    hydrateConversationDetail,
+    hydratedConversationIds,
+    selectedConversationId,
+  ]);
   const prospects = useMemo(() => conversations.map((conversation) => conversation.prospect), [
     conversations,
   ]);
@@ -731,16 +1175,108 @@ export default function Messages() {
   const selectedProfile = selectedProspect?.instagramId
     ? profilesById[selectedProspect.instagramId] ?? null
     : null;
+  const selectedProspectInstagramId = selectedProspect?.instagramId ?? null;
   const currentAiNotes = selectedConversationId
     ? aiNotesByConversationId[selectedConversationId] ?? []
     : [];
   const aiNotesLoading = Boolean(
     selectedConversationId && aiNotesRequestConversationId === selectedConversationId,
   );
+  const isSelectedConversationLoadingOlderMessages = Boolean(
+    selectedConversation && loadingOlderMessageIds.includes(selectedConversation.id),
+  );
 
-  const handleSelectProspect = useCallback((prospect: Prospect) => {
-    setSelectedConversationId(prospect.id);
-  }, []);
+  const refreshSelectedConversationData = useCallback(async () => {
+    if (!selectedConversationId) {
+      return;
+    }
+
+    ensureConversationMessageLimit(selectedConversationId);
+    const requestedLimit = getConversationMessageLimit(selectedConversationId);
+
+    await hydrateConversationDetail(selectedConversationId, {
+      force: true,
+      messageLimit: requestedLimit,
+    });
+
+    if (!selectedProspectInstagramId) {
+      return;
+    }
+
+    try {
+      await fetchProfileByInstagramId(selectedProspectInstagramId);
+    } catch {
+      // Errors already logged inside fetchProfileByInstagramId
+    }
+  }, [
+    ensureConversationMessageLimit,
+    fetchProfileByInstagramId,
+    getConversationMessageLimit,
+    hydrateConversationDetail,
+    selectedConversationId,
+    selectedProspectInstagramId,
+  ]);
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) {
+      return undefined;
+    }
+
+    const tick = () => {
+      refreshSelectedConversationData();
+    };
+
+    tick();
+
+    const interval = setInterval(tick, CONVERSATION_REFRESH_INTERVAL_MS);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [autoRefreshEnabled, refreshSelectedConversationData]);
+
+  const handleLoadOlderMessages = useCallback(
+    async (conversationId: string) => {
+      if (!conversationId) {
+        return;
+      }
+
+      const currentLimit = getConversationMessageLimit(conversationId);
+      if (currentLimit >= MAX_CONVERSATION_MESSAGE_LIMIT) {
+        return;
+      }
+
+      const nextLimit = Math.min(
+        currentLimit + CONVERSATION_MESSAGE_PAGE_SIZE,
+        MAX_CONVERSATION_MESSAGE_LIMIT,
+      );
+
+      setConversationMessageLimits((prev) => ({ ...prev, [conversationId]: nextLimit }));
+      setLoadingOlderMessageIds((prev) =>
+        prev.includes(conversationId) ? prev : [...prev, conversationId],
+      );
+
+      try {
+        await hydrateConversationDetail(conversationId, {
+          force: true,
+          messageLimit: nextLimit,
+        });
+      } finally {
+        setLoadingOlderMessageIds((prev) => prev.filter((id) => id !== conversationId));
+      }
+    },
+    [
+      getConversationMessageLimit,
+      hydrateConversationDetail,
+    ],
+  );
+
+  const handleSelectProspect = useCallback(
+    (prospect: Prospect) => {
+      ensureConversationMessageLimit(prospect.id);
+      setSelectedConversationId(prospect.id);
+    },
+    [ensureConversationMessageLimit],
+  );
 
   const handleToggleAutopilot = useCallback(
     async (conversationId: string, enabled: boolean) => {
@@ -1179,7 +1715,24 @@ export default function Messages() {
     );
   }
 
+  const hasFilterApplied = selectedFilter !== "all" || Boolean(searchQuery);
+
   if (!isLoading && conversations.length === 0) {
+    const handleEmptyStateAction = () => {
+      if (selectedFilter !== "all" || searchQuery) {
+        setSelectedFilter("all");
+        if (searchQuery) {
+          setSearchQuery("");
+        }
+        return;
+      }
+      refreshConversations();
+    };
+
+    const emptyButtonLabel = selectedFilter !== "all" || searchQuery
+      ? "View all conversations"
+      : "Refresh";
+
     return (
       <AppLayout>
         <div className="flex h-full max-h-screen flex-col items-center justify-center gap-4 text-center">
@@ -1189,8 +1742,12 @@ export default function Messages() {
               {error ?? "We'll start populating this inbox as soon as new Instagram DMs arrive."}
             </p>
           </div>
-          <Button onClick={() => refreshConversations()} disabled={isLoading || isRefreshing}>
-            Refresh
+          <Button
+            onClick={handleEmptyStateAction}
+            disabled={isLoading || isRefreshing}
+            variant={hasFilterApplied ? "outline" : "default"}
+          >
+            {emptyButtonLabel}
           </Button>
         </div>
       </AppLayout>
@@ -1241,11 +1798,16 @@ export default function Messages() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             stageFilters={stageFilters}
+            onLoadMore={loadMoreConversations}
+            hasMore={hasMoreConversations}
+            isLoadingMore={isFetchingMoreConversations}
           />
 
           <ChatWindow
             conversation={selectedConversation ?? null}
             onSendMessage={handleSendMessage}
+            onLoadOlderMessages={handleLoadOlderMessages}
+            isLoadingOlderMessages={isSelectedConversationLoadingOlderMessages}
           />
 
           <ProspectPanel
