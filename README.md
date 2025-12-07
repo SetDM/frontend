@@ -1,73 +1,38 @@
-# Welcome to your Lovable project
+# SetDM Frontend
 
-## Project info
+Modern React + Vite application for managing the SetDM dashboard. The app is built with TypeScript, Tailwind CSS, shadcn/ui components, and the SWC-powered React plugin for fast local iteration.
 
-**URL**: https://lovable.dev/projects/dc9349af-91b0-4657-b2b5-e41922c3ee45
-
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/dc9349af-91b0-4657-b2b5-e41922c3ee45) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Getting Started
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+git clone <repo-url>
+cd frontend
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The development server runs on <http://localhost:5173> by default. Update `src/lib/config.ts` if your backend API base URL changes between environments.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Available Scripts
 
-**Use GitHub Codespaces**
+- `npm run dev` – start Vite in development mode with hot reloading
+- `npm run build` – produce a production build in `dist/`
+- `npm run preview` – preview the production build locally
+- `npm run lint` – run ESLint with the project configuration
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Deployment
 
-## What technologies are used for this project?
+The app is optimized for static hosting providers such as Netlify or Vercel. When deploying to Netlify, ensure `npm run build` is used as the build command and `dist` is the publish directory. For single-page app routing, include the `_redirects` file in `public/` (already present) so deep links resolve to `index.html`.
 
-This project is built with:
+## Tech Stack
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
+- React + TypeScript
+- Vite (SWC)
 - Tailwind CSS
+- shadcn/ui component primitives
 
-## How can I deploy this project?
+## Contributing
 
-Simply open [Lovable](https://lovable.dev/projects/dc9349af-91b0-4657-b2b5-e41922c3ee45) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+1. Create a new branch for your change.
+2. Run `npm run lint` and `npm run build` before opening a PR.
+3. Ensure any environment variables or configuration changes are documented so deployments stay reproducible.
