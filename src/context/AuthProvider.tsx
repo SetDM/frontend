@@ -129,12 +129,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     refreshUser();
   }, [refreshUser]);
 
+  const resolvedToken = useMemo(() => {
+    return authToken ?? user?.token ?? getStoredAuthToken();
+  }, [authToken, user?.token]);
+
   const authorizedFetch = useCallback(
     (input: RequestInfo | URL, options?: Omit<ApiFetchOptions, "authToken">) => {
-      const token = authToken ?? user?.token ?? getStoredAuthToken();
-      return apiFetch(input, { ...options, authToken: token ?? undefined });
+      return apiFetch(input, { ...options, authToken: resolvedToken ?? undefined });
     },
-    [authToken, user?.token],
+    [resolvedToken],
   );
 
   const value = useMemo(
@@ -142,13 +145,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       user,
       isLoading,
       error,
+      authToken: resolvedToken ?? null,
       refreshUser,
       redirectToLogin,
       logout,
       clearError,
       authorizedFetch,
     }),
-    [user, isLoading, error, refreshUser, redirectToLogin, logout, clearError, authorizedFetch],
+    [
+      user,
+      isLoading,
+      error,
+      resolvedToken,
+      refreshUser,
+      redirectToLogin,
+      logout,
+      clearError,
+      authorizedFetch,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { io, type Socket } from "socket.io-client";
 import { AppLayout } from "@/components/AppLayout";
 import { ConversationList } from "@/components/messages/ConversationList";
 import { ChatWindow } from "@/components/messages/ChatWindow";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { usePageTitle } from "@/hooks/usePageTitle";
-import { CONVERSATION_ENDPOINTS, USER_ENDPOINTS } from "@/lib/config";
+import { BACKEND_URL, CONVERSATION_ENDPOINTS, USER_ENDPOINTS } from "@/lib/config";
 import type {
   Conversation,
   ConversationRecord,
@@ -33,7 +34,6 @@ const PROFILE_REQUEST_CACHE_MODE: RequestCache = "no-store";
 
 const stageFilters: (FunnelStage | "all")[] = ["all", ...FUNNEL_STAGES];
 
-const CONVERSATION_REFRESH_INTERVAL_MS = 5000; // 5s polling cadence for new data
 const CONVERSATIONS_PAGE_SIZE = 7;
 const CONVERSATION_MESSAGE_PAGE_SIZE = 50;
 const INITIAL_CONVERSATION_MESSAGE_LIMIT = CONVERSATION_MESSAGE_PAGE_SIZE;
@@ -127,6 +127,142 @@ const formatMessageTimestamp = (input?: string | number | Date) => {
   }
 
   return timeFormatter.format(date);
+};
+
+const REALTIME_EVENTS = {
+  MESSAGE_CREATED: "conversation:message.created",
+  QUEUE_UPDATED: "conversation:queue.updated",
+  UPSERTED: "conversation:upserted",
+} as const;
+
+type ConversationRealtimeEnvelope = {
+  conversationId?: string;
+  senderId?: string;
+  recipientId?: string;
+  lastUpdated?: string;
+};
+
+type ConversationRealtimeMessagePayload = ConversationRealtimeEnvelope & {
+  message?: {
+    id?: string;
+    content?: string;
+    role?: "assistant" | "user";
+    timestamp?: string | number | Date;
+    metadata?: {
+      mid?: string;
+    };
+    isAiGenerated?: boolean;
+  };
+};
+
+type ConversationRealtimeQueueEntry = {
+  id?: string;
+  content?: string;
+  scheduledFor?: string | null;
+  createdAt?: string | null;
+  delayMs?: number;
+  metadata?: Record<string, unknown> | null;
+};
+
+type ConversationRealtimeQueuePayload = ConversationRealtimeEnvelope & {
+  queuedMessages?: ConversationRealtimeQueueEntry[];
+};
+
+type ConversationRealtimeUpsertPayload = ConversationRealtimeEnvelope & {
+  stageTag?: string | null;
+  isFlagged?: boolean;
+  isAutopilotOn?: boolean;
+  reason?: string;
+};
+
+const calculateSendsInSeconds = (scheduledIso?: string | null) => {
+  if (!scheduledIso) {
+    return 0;
+  }
+
+  const timestamp = new Date(scheduledIso).getTime();
+  if (Number.isNaN(timestamp)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor((timestamp - Date.now()) / 1000));
+};
+
+const normalizeRealtimeQueueEntries = (entries: ConversationRealtimeQueueEntry[] = []) => {
+  return entries
+    .map((entry, index) => {
+      const content = typeof entry?.content === "string" ? entry.content.trim() : "";
+      if (!content) {
+        return null;
+      }
+
+      const scheduledFor =
+        typeof entry?.scheduledFor === "string" && entry.scheduledFor.length > 0
+          ? entry.scheduledFor
+          : null;
+
+      return {
+        id:
+          typeof entry?.id === "string" && entry.id.length > 0
+            ? entry.id
+            : `queued-${index}`,
+        content,
+        scheduledFor,
+        sendsIn: calculateSendsInSeconds(scheduledFor),
+        delayMs: typeof entry?.delayMs === "number" ? entry.delayMs : undefined,
+      } as QueuedMessage;
+    })
+    .filter((entry): entry is QueuedMessage => Boolean(entry))
+    .sort((a, b) => {
+      if (a.scheduledFor && b.scheduledFor) {
+        return new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime();
+      }
+      if (a.scheduledFor) {
+        return -1;
+      }
+      if (b.scheduledFor) {
+        return 1;
+      }
+      return 0;
+    });
+};
+
+const normalizeRealtimeMessage = (
+  conversationId: string,
+  realtime?: ConversationRealtimeMessagePayload["message"],
+): Message | null => {
+  if (!realtime) {
+    return null;
+  }
+
+  const content = typeof realtime.content === "string" ? realtime.content.trim() : "";
+  if (!content) {
+    return null;
+  }
+
+  const timestampInput =
+    realtime.timestamp instanceof Date || typeof realtime.timestamp === "number"
+      ? realtime.timestamp
+      : typeof realtime.timestamp === "string"
+        ? realtime.timestamp
+        : new Date().toISOString();
+
+  const normalizedTimestamp = formatMessageTimestamp(timestampInput);
+
+  const messageId =
+    typeof realtime.id === "string" && realtime.id.length > 0
+      ? realtime.id
+      : typeof realtime.metadata?.mid === "string" && realtime.metadata.mid.length > 0
+        ? realtime.metadata.mid
+        : `${conversationId}-${Date.now()}`;
+
+  return {
+    id: messageId,
+    content,
+    timestamp: normalizedTimestamp,
+    isFromProspect: (realtime.role ?? "user") !== "assistant",
+    isAiGenerated: Boolean(realtime.isAiGenerated),
+  };
 };
 
 const getMetadataString = (metadata: Record<string, unknown> | undefined, key: string) => {
@@ -456,7 +592,7 @@ const extractUserProfile = (payload: unknown): InstagramUserProfile | null => {
 };
 
 export default function Messages() {
-  const { authorizedFetch } = useAuth();
+  const { authorizedFetch, authToken } = useAuth();
   usePageTitle("Messages");
   const [searchParams] = useSearchParams();
   const stageParam = (searchParams.get("stage") as FunnelStage | "all") || "all";
@@ -488,11 +624,13 @@ export default function Messages() {
     null,
   );
   const [loadingOlderMessageIds, setLoadingOlderMessageIds] = useState<string[]>([]);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const profilesByIdRef = useRef<Record<string, InstagramUserProfile>>({});
   const hydratedConversationIdsRef = useRef<Record<string, boolean>>({});
   const conversationsRef = useRef<Conversation[]>([]);
   const detailRequestInFlightRef = useRef<Record<string, boolean>>({});
   const refreshInFlightRef = useRef(false);
+  const realtimeSocketRef = useRef<Socket | null>(null);
 
   const getConversationMessageLimit = useCallback(
     (conversationId: string | null) => {
@@ -639,60 +777,6 @@ export default function Messages() {
         }
         return acc;
       }, {});
-    },
-    [authorizedFetch],
-  );
-
-  const fetchProfileByInstagramId = useCallback(
-    async (instagramId: string, signal?: AbortSignal) => {
-      if (!instagramId) {
-        return null;
-      }
-
-      try {
-        const response = await authorizedFetch(USER_ENDPOINTS.profile(instagramId), {
-          signal,
-          cache: PROFILE_REQUEST_CACHE_MODE,
-        });
-
-        if (response.status === 304) {
-          return profilesByIdRef.current[instagramId] ?? null;
-        }
-
-        let payload: unknown = null;
-        try {
-          payload = await response.json();
-        } catch {
-          payload = null;
-        }
-
-        if (response.status === 404) {
-          setProfilesById((prev) => {
-            if (!(instagramId in prev)) {
-              return prev;
-            }
-            const next = { ...prev };
-            delete next[instagramId];
-            return next;
-          });
-          return null;
-        }
-
-        if (!response.ok) {
-          throw new Error(`Failed to refresh profile for ${instagramId}`);
-        }
-
-        const profile = extractUserProfile(payload);
-        if (profile) {
-          setProfilesById((prev) => ({ ...prev, [instagramId]: profile }));
-        }
-        return profile;
-      } catch (err) {
-        if (!(err instanceof Error && err.name === "AbortError")) {
-          console.error(`Failed to refresh Instagram profile for ${instagramId}`, err);
-        }
-        throw err;
-      }
     },
     [authorizedFetch],
   );
@@ -1032,6 +1116,245 @@ export default function Messages() {
     ],
   );
 
+  const handleRealtimeMessage = useCallback(
+    (payload: ConversationRealtimeMessagePayload = {}) => {
+      const conversationId = payload?.conversationId;
+      if (!conversationId) {
+        return;
+      }
+
+      const normalizedMessage = normalizeRealtimeMessage(conversationId, payload.message);
+      if (!normalizedMessage) {
+        return;
+      }
+
+      const relativeTimestamp = formatRelativeTime(
+        payload.lastUpdated ?? new Date().toISOString(),
+      );
+      let conversationUpdated = false;
+
+      setConversations((prev) => {
+        let changed = false;
+
+        const next = prev.map((conversation) => {
+          if (conversation.id !== conversationId) {
+            return conversation;
+          }
+
+          const hasMessageAlready = conversation.messages.some(
+            (message) => message.id === normalizedMessage.id,
+          );
+
+          if (
+            hasMessageAlready &&
+            conversation.prospect.lastMessage === normalizedMessage.content &&
+            conversation.prospect.lastMessageTime === relativeTimestamp
+          ) {
+            return conversation;
+          }
+
+          changed = true;
+          conversationUpdated = true;
+
+          const updatedMessages = hasMessageAlready
+            ? conversation.messages
+            : [...conversation.messages, normalizedMessage];
+
+          return {
+            ...conversation,
+            messages: updatedMessages,
+            prospect: {
+              ...conversation.prospect,
+              lastMessage: normalizedMessage.content,
+              lastMessageTime: relativeTimestamp,
+              isUnread: conversation.id !== selectedConversationId,
+            },
+          };
+        });
+
+        return changed ? next : prev;
+      });
+
+      if (!conversationUpdated) {
+        refreshConversations({ silent: true });
+        return;
+      }
+
+      if (selectedConversationId === conversationId) {
+        ensureConversationMessageLimit(conversationId);
+        const requestedLimit = getConversationMessageLimit(conversationId);
+        hydrateConversationDetail(conversationId, {
+          force: true,
+          messageLimit: requestedLimit,
+        });
+      }
+    },
+    [
+      ensureConversationMessageLimit,
+      getConversationMessageLimit,
+      hydrateConversationDetail,
+      refreshConversations,
+      selectedConversationId,
+    ],
+  );
+
+  const handleRealtimeQueueUpdate = useCallback(
+    (payload: ConversationRealtimeQueuePayload = {}) => {
+      const conversationId = payload?.conversationId;
+      if (!conversationId) {
+        return;
+      }
+
+      const normalizedQueue = normalizeRealtimeQueueEntries(payload.queuedMessages ?? []);
+      let conversationUpdated = false;
+
+      setConversations((prev) => {
+        let changed = false;
+
+        const next = prev.map((conversation) => {
+          if (conversation.id !== conversationId) {
+            return conversation;
+          }
+
+          changed = true;
+          conversationUpdated = true;
+
+          return {
+            ...conversation,
+            queuedMessages: normalizedQueue,
+          };
+        });
+
+        return changed ? next : prev;
+      });
+
+      if (!conversationUpdated) {
+        refreshConversations({ silent: true });
+      }
+    },
+    [refreshConversations],
+  );
+
+  const handleRealtimeUpsert = useCallback(
+    (payload: ConversationRealtimeUpsertPayload = {}) => {
+      const conversationId = payload?.conversationId;
+      if (!conversationId) {
+        return;
+      }
+
+      let conversationUpdated = false;
+
+      setConversations((prev) => {
+        let changed = false;
+
+        const next = prev.map((conversation) => {
+          if (conversation.id !== conversationId) {
+            return conversation;
+          }
+
+          const resolvedStage =
+            typeof payload.stageTag === "string" && payload.stageTag.length > 0
+              ? normalizeStageTag(payload.stageTag)
+              : conversation.prospect.stage;
+
+          const resolvedAutopilot =
+            typeof payload.isAutopilotOn === "boolean"
+              ? payload.isAutopilotOn
+              : conversation.prospect.autopilotEnabled;
+
+          const resolvedFlagged =
+            typeof payload.isFlagged === "boolean"
+              ? payload.isFlagged
+              : resolvedStage === "flagged";
+
+          if (
+            resolvedStage === conversation.prospect.stage &&
+            resolvedAutopilot === conversation.prospect.autopilotEnabled &&
+            resolvedFlagged === Boolean(conversation.prospect.isFlagged)
+          ) {
+            return conversation;
+          }
+
+          changed = true;
+          conversationUpdated = true;
+
+          return {
+            ...conversation,
+            prospect: {
+              ...conversation.prospect,
+              stage: resolvedStage,
+              autopilotEnabled: resolvedAutopilot,
+              isFlagged: resolvedFlagged,
+            },
+          };
+        });
+
+        return changed ? next : prev;
+      });
+
+      if (!conversationUpdated) {
+        refreshConversations({ silent: true });
+      }
+    },
+    [refreshConversations],
+  );
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) {
+      if (realtimeSocketRef.current) {
+        realtimeSocketRef.current.disconnect();
+        realtimeSocketRef.current = null;
+      }
+      setIsRealtimeConnected(false);
+      return undefined;
+    }
+
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const socket = io(BACKEND_URL, {
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+      auth: authToken ? { token: authToken } : undefined,
+      extraHeaders: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+    });
+
+    realtimeSocketRef.current = socket;
+
+    const handleConnect = () => setIsRealtimeConnected(true);
+    const handleDisconnect = () => setIsRealtimeConnected(false);
+    const handleConnectError = (error: Error) => {
+      console.error("Realtime connection error", error);
+      setIsRealtimeConnected(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
+    socket.on(REALTIME_EVENTS.MESSAGE_CREATED, handleRealtimeMessage);
+    socket.on(REALTIME_EVENTS.QUEUE_UPDATED, handleRealtimeQueueUpdate);
+    socket.on(REALTIME_EVENTS.UPSERTED, handleRealtimeUpsert);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
+      socket.off(REALTIME_EVENTS.MESSAGE_CREATED, handleRealtimeMessage);
+      socket.off(REALTIME_EVENTS.QUEUE_UPDATED, handleRealtimeQueueUpdate);
+      socket.off(REALTIME_EVENTS.UPSERTED, handleRealtimeUpsert);
+      socket.disconnect();
+      realtimeSocketRef.current = null;
+      setIsRealtimeConnected(false);
+    };
+  }, [
+    authToken,
+    autoRefreshEnabled,
+    handleRealtimeMessage,
+    handleRealtimeQueueUpdate,
+    handleRealtimeUpsert,
+  ]);
+
   const loadMoreConversations = useCallback(
     async () => {
       if (isLoading || isFetchingMoreConversations || !hasMoreConversations) {
@@ -1175,7 +1498,6 @@ export default function Messages() {
   const selectedProfile = selectedProspect?.instagramId
     ? profilesById[selectedProspect.instagramId] ?? null
     : null;
-  const selectedProspectInstagramId = selectedProspect?.instagramId ?? null;
   const currentAiNotes = selectedConversationId
     ? aiNotesByConversationId[selectedConversationId] ?? []
     : [];
@@ -1185,54 +1507,6 @@ export default function Messages() {
   const isSelectedConversationLoadingOlderMessages = Boolean(
     selectedConversation && loadingOlderMessageIds.includes(selectedConversation.id),
   );
-
-  const refreshSelectedConversationData = useCallback(async () => {
-    if (!selectedConversationId) {
-      return;
-    }
-
-    ensureConversationMessageLimit(selectedConversationId);
-    const requestedLimit = getConversationMessageLimit(selectedConversationId);
-
-    await hydrateConversationDetail(selectedConversationId, {
-      force: true,
-      messageLimit: requestedLimit,
-    });
-
-    if (!selectedProspectInstagramId) {
-      return;
-    }
-
-    try {
-      await fetchProfileByInstagramId(selectedProspectInstagramId);
-    } catch {
-      // Errors already logged inside fetchProfileByInstagramId
-    }
-  }, [
-    ensureConversationMessageLimit,
-    fetchProfileByInstagramId,
-    getConversationMessageLimit,
-    hydrateConversationDetail,
-    selectedConversationId,
-    selectedProspectInstagramId,
-  ]);
-
-  useEffect(() => {
-    if (!autoRefreshEnabled) {
-      return undefined;
-    }
-
-    const tick = () => {
-      refreshSelectedConversationData();
-    };
-
-    tick();
-
-    const interval = setInterval(tick, CONVERSATION_REFRESH_INTERVAL_MS);
-    return () => {
-      clearInterval(interval);
-    };
-  }, [autoRefreshEnabled, refreshSelectedConversationData]);
 
   const handleLoadOlderMessages = useCallback(
     async (conversationId: string) => {
@@ -1774,13 +2048,25 @@ export default function Messages() {
         )}
 
         <div className="mx-4 mb-2 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Automatic refresh</span>
+          <span>Live updates</span>
           <div className="flex items-center gap-2">
-            <Switch
-              checked={autoRefreshEnabled}
-              onCheckedChange={setAutoRefreshEnabled}
+            <span
+              className={`h-2 w-2 rounded-full ${
+                !autoRefreshEnabled
+                  ? "bg-muted"
+                  : isRealtimeConnected
+                    ? "bg-emerald-500"
+                    : "bg-amber-400"
+              }`}
             />
-            <span>{autoRefreshEnabled ? "On" : "Off"}</span>
+            <Switch checked={autoRefreshEnabled} onCheckedChange={setAutoRefreshEnabled} />
+            <span>
+              {!autoRefreshEnabled
+                ? "Off"
+                : isRealtimeConnected
+                  ? "Connected"
+                  : "Connecting…"}
+            </span>
           </div>
         </div>
 
