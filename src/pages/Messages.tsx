@@ -2047,28 +2047,7 @@ export default function Messages() {
           </div>
         )}
 
-        <div className="mx-4 mb-2 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Live updates</span>
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                !autoRefreshEnabled
-                  ? "bg-muted"
-                  : isRealtimeConnected
-                    ? "bg-emerald-500"
-                    : "bg-amber-400"
-              }`}
-            />
-            <Switch checked={autoRefreshEnabled} onCheckedChange={setAutoRefreshEnabled} />
-            <span>
-              {!autoRefreshEnabled
-                ? "Off"
-                : isRealtimeConnected
-                  ? "Connected"
-                  : "Connecting…"}
-            </span>
-          </div>
-        </div>
+        {/* Live updates toggle temporarily hidden */}
 
         {(isLoading || isRefreshing) && conversations.length > 0 && (
           <div className="mx-4 mb-2 text-xs text-muted-foreground">Refreshing conversations…</div>

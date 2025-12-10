@@ -24,3 +24,7 @@ export const CONVERSATION_ENDPOINTS = {
 export const USER_ENDPOINTS = {
   profile: (instagramId: string) => `${API_BASE_URL}/users/${instagramId}`,
 };
+
+export const PROMPT_ENDPOINTS = {
+  system: `${API_BASE_URL}/prompts/system`,
+};

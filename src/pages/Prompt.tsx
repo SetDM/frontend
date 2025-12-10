@@ -4,10 +4,54 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { Send, Plus, Upload, X, Sparkles } from "lucide-react";
+import { Send, Plus, Sparkles } from "lucide-react";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { useAuth } from "@/hooks/useAuth";
+import { PROMPT_ENDPOINTS } from "@/lib/config";
+
+const DEFAULT_COACH_NAME = "Iris";
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const extractBlock = (source: string, label: string) => {
+  const pattern = new RegExp(`\\[${escapeRegex(label)}\\]\\s*\\{([\\s\\S]*?)\\}`, "i");
+  const match = source.match(pattern);
+  return match ? match[1].trim() : "";
+};
+
+const replaceBlock = (source: string, label: string, nextValue: string) => {
+  const pattern = new RegExp(`(\\[${escapeRegex(label)}\\]\\s*\\{)([\\s\\S]*?)(\\})`, "i");
+  const normalizedValue = nextValue.trim();
+
+  if (pattern.test(source)) {
+    return source.replace(pattern, (_match, start, _current, end) => {
+      const body = normalizedValue ? `\n${normalizedValue}\n` : "\n";
+      return `${start}${body}${end}`;
+    });
+  }
+
+  return `${source}\n\nThis is the variable [${label}] {\n${normalizedValue}\n}`;
+};
+
+const extractCoachName = (source: string) => {
+  const match = source.match(/Coach Name:\s*(.+)/i);
+  return match?.[1]?.trim() || DEFAULT_COACH_NAME;
+};
+
+const upsertCoachNameLine = (source: string, coachName: string) => {
+  const safeName = coachName.trim();
+  if (!safeName) {
+    return source;
+  }
+
+  if (/Coach Name:/i.test(source)) {
+    return source.replace(/Coach Name:\s*.*/i, `Coach Name: ${safeName}`);
+  }
+
+  return `Coach Name: ${safeName}\n\n${source}`;
+};
 
 interface TestMessage {
   id: string;
@@ -17,34 +61,116 @@ interface TestMessage {
 
 export default function Prompt() {
   usePageTitle("Prompt");
-  const [coachName, setCoachName] = useState("Iris");
-  const [description, setDescription] = useState("A friendly fitness coach who helps prospects discover if they're a good fit for transformation coaching.");
-  const [instructions, setInstructions] = useState(`You are acting as ${coachName || "the coach"} responding to Instagram DMs. Your goal is to qualify leads for high-ticket fitness coaching.
+  const { authorizedFetch } = useAuth();
+  const promptAdminToken = import.meta.env.VITE_PROMPT_ADMIN_TOKEN;
 
-IMPORTANT: Never reveal you are an AI. Always respond as if you are the coach personally.
+  const [coachName, setCoachName] = useState(DEFAULT_COACH_NAME);
+  const [leadSequence, setLeadSequence] = useState("");
+  const [qualificationSequence, setQualificationSequence] = useState("");
+  const [bookingSequence, setBookingSequence] = useState("");
+  const [rawPrompt, setRawPrompt] = useState("");
+  const [isFetchingPrompt, setIsFetchingPrompt] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
 
-Key behaviors:
-- Be warm, friendly, and conversational
-- Ask about their fitness goals and current situation
-- Gauge their budget and timeline naturally
-- Guide qualified leads toward booking a call
-- Don't be pushy - focus on providing value first`);
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
-
-  // Test chat state
   const [testMessages, setTestMessages] = useState<TestMessage[]>([
     {
       id: "1",
       content: "Start by sending a test message to see how your AI responds.",
       isUser: false,
-    }
+    },
   ]);
   const [testInput, setTestInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const handleSave = () => {
-    toast.success("AI configuration saved successfully!");
+  const hydratePrompt = useCallback(async () => {
+    if (!promptAdminToken) {
+      setPromptError("Prompt admin token is not configured.");
+      setIsFetchingPrompt(false);
+      return;
+    }
+
+    try {
+      setPromptError(null);
+      setIsFetchingPrompt(true);
+      const response = await authorizedFetch(PROMPT_ENDPOINTS.system, {
+        headers: {
+          "x-admin-token": promptAdminToken,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to load prompt configuration.");
+      }
+
+      const payload = (await response.json()) as { content?: string };
+      const content = payload?.content || "";
+
+      setRawPrompt(content);
+      setLeadSequence(extractBlock(content, "lead sequence"));
+      setQualificationSequence(extractBlock(content, "qualification sequence"));
+      setBookingSequence(extractBlock(content, "booking sequence"));
+      setCoachName(extractCoachName(content));
+    } catch (error) {
+      console.error(error);
+      setPromptError(
+        error instanceof Error ? error.message : "Failed to load prompt configuration.",
+      );
+    } finally {
+      setIsFetchingPrompt(false);
+    }
+  }, [authorizedFetch, promptAdminToken]);
+
+  useEffect(() => {
+    hydratePrompt();
+  }, [hydratePrompt]);
+
+  const handleSave = async () => {
+    if (!promptAdminToken) {
+      toast.error("Prompt admin token is not configured.");
+      return;
+    }
+
+    if (!rawPrompt.trim()) {
+      toast.error("Prompt template has not loaded yet.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      let updatedPrompt = rawPrompt;
+      updatedPrompt = replaceBlock(updatedPrompt, "lead sequence", leadSequence);
+      updatedPrompt = replaceBlock(updatedPrompt, "qualification sequence", qualificationSequence);
+      updatedPrompt = replaceBlock(updatedPrompt, "booking sequence", bookingSequence);
+      updatedPrompt = upsertCoachNameLine(updatedPrompt, coachName);
+
+      const response = await authorizedFetch(PROMPT_ENDPOINTS.system, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": promptAdminToken,
+        },
+        body: JSON.stringify({ content: updatedPrompt }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message =
+          (payload && typeof payload === "object" && "message" in payload
+            ? (payload as { message?: string }).message
+            : null) || "Failed to save prompt.";
+        throw new Error(message);
+      }
+
+      setRawPrompt(updatedPrompt);
+      toast.success("Prompt updated successfully!");
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Failed to save prompt.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleTestSend = () => {
@@ -56,32 +182,25 @@ Key behaviors:
       isUser: true,
     };
 
-    setTestMessages(prev => [...prev, userMessage]);
+    setTestMessages((prev) => [...prev, userMessage]);
     setTestInput("");
     setIsThinking(true);
 
-    // Simulate AI response
     setTimeout(() => {
       const aiResponse: TestMessage = {
         id: (Date.now() + 1).toString(),
-        content: `Hey! Thanks for reaching out 💪 I'd love to learn more about your fitness goals. What's been your biggest challenge lately when it comes to staying consistent with training?`,
+        content:
+          "Hey! Thanks for reaching out 💪 I'd love to learn more about your fitness goals. What's been your biggest challenge lately when it comes to staying consistent with training?",
         isUser: false,
       };
-      setTestMessages(prev => [...prev, aiResponse]);
+      setTestMessages((prev) => [...prev, aiResponse]);
       setIsThinking(false);
     }, 1500);
-  };
-
-  const handleFileUpload = () => {
-    // Placeholder for file upload functionality
-    setUploadedFiles([...uploadedFiles, "example_conversation.txt"]);
-    toast.success("File uploaded successfully!");
   };
 
   return (
     <AppLayout>
       <div className="h-[calc(100vh-2rem)] flex">
-        {/* Left Panel - Configuration */}
         <div className="flex-1 flex flex-col border-r border-border">
           <div className="flex-1 p-6 overflow-auto pb-24">
             <div className="max-w-2xl">
@@ -93,9 +212,10 @@ Key behaviors:
               </div>
 
               <div className="space-y-6">
-                {/* Coach Name */}
                 <div className="rounded-lg bg-card p-5 shadow-card">
-                  <Label htmlFor="coach-name" className="text-base font-medium">Coach Name</Label>
+                  <Label htmlFor="coach-name" className="text-base font-medium">
+                    Coach Name
+                  </Label>
                   <p className="text-sm text-muted-foreground mb-2">
                     The AI will respond as this person (never reveals it's an AI)
                   </p>
@@ -105,89 +225,89 @@ Key behaviors:
                     onChange={(e) => setCoachName(e.target.value)}
                     placeholder="Your name"
                     className="mt-1"
+                    disabled={isFetchingPrompt}
                   />
                 </div>
 
-                {/* Description */}
                 <div className="rounded-lg bg-card p-5 shadow-card">
-                  <Label htmlFor="description" className="text-base font-medium">Description</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="lead-sequence" className="text-base font-medium">
+                      Lead Sequence
+                    </Label>
+                    <span className="text-xs text-muted-foreground">[lead sequence]</span>
+                  </div>
                   <p className="text-sm text-muted-foreground mb-2">
-                    A short description of your AI's purpose
+                    Customize the conversation flow for new leads.
                   </p>
                   <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Add a short description about what this AI does"
-                    className="mt-1 min-h-[80px] resize-none"
-                  />
-                </div>
-
-                {/* Instructions */}
-                <div className="rounded-lg bg-card p-5 shadow-card">
-                  <Label htmlFor="instructions" className="text-base font-medium">Instructions</Label>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    What does this AI do? How does it behave? What should it avoid doing?
-                  </p>
-                  <Textarea
-                    id="instructions"
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    placeholder="Describe how your AI should communicate, what to do and what NOT to do..."
+                    id="lead-sequence"
+                    value={leadSequence}
+                    onChange={(e) => setLeadSequence(e.target.value)}
+                    placeholder="Define the lead sequence"
                     className="mt-1 min-h-[200px] font-mono text-sm"
+                    disabled={isFetchingPrompt}
                   />
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Conversations may include part or all of the instructions provided.
-                  </p>
                 </div>
 
-                {/* Knowledge / File Upload */}
                 <div className="rounded-lg bg-card p-5 shadow-card">
-                  <Label className="text-base font-medium">Knowledge</Label>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Upload example conversations to fine-tune your AI's voice and style
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="qualification-sequence" className="text-base font-medium">
+                      Qualification Sequence
+                    </Label>
+                    <span className="text-xs text-muted-foreground">[qualification sequence]</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Questions and logic you use to qualify prospects.
                   </p>
-                  
-                  {uploadedFiles.length > 0 && (
-                    <div className="mb-3 space-y-2">
-                      {uploadedFiles.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                          <span className="text-sm">{file}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setUploadedFiles(uploadedFiles.filter((_, i) => i !== index))}
-                            className="h-8 w-8"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <Button variant="outline" onClick={handleFileUpload}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload files
-                  </Button>
+                  <Textarea
+                    id="qualification-sequence"
+                    value={qualificationSequence}
+                    onChange={(e) => setQualificationSequence(e.target.value)}
+                    placeholder="Define the qualification sequence"
+                    className="mt-1 min-h-[200px] font-mono text-sm"
+                    disabled={isFetchingPrompt}
+                  />
                 </div>
+
+                <div className="rounded-lg bg-card p-5 shadow-card">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="booking-sequence" className="text-base font-medium">
+                      Booking Sequence
+                    </Label>
+                    <span className="text-xs text-muted-foreground">[booking sequence]</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    The exact script used to move qualified prospects to schedule a call.
+                  </p>
+                  <Textarea
+                    id="booking-sequence"
+                    value={bookingSequence}
+                    onChange={(e) => setBookingSequence(e.target.value)}
+                    placeholder="Define the booking sequence"
+                    className="mt-1 min-h-[200px] font-mono text-sm"
+                    disabled={isFetchingPrompt}
+                  />
+                </div>
+
+                {promptError && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                    {promptError}
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          
-          {/* Sticky Save Button */}
+
           <div className="sticky bottom-0 p-4 bg-background/80 backdrop-blur-sm border-t border-border">
             <div className="max-w-2xl flex justify-end">
-              <Button onClick={handleSave} size="lg">
-                Save Configuration
+              <Button onClick={handleSave} size="lg" disabled={isSaving || isFetchingPrompt}>
+                {isSaving ? "Saving…" : "Save Configuration"}
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Right Panel - Test Chat */}
         <div className="w-[400px] flex flex-col bg-muted/30">
-          {/* Header */}
           <div className="p-4 border-b border-border bg-card">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-foreground">Preview</h2>
@@ -198,7 +318,6 @@ Key behaviors:
             </div>
           </div>
 
-          {/* Chat Messages */}
           <ScrollArea className="flex-1 p-4" ref={scrollRef}>
             <div className="space-y-4">
               {testMessages.map((message) => (
@@ -230,7 +349,6 @@ Key behaviors:
             </div>
           </ScrollArea>
 
-          {/* Input */}
           <div className="p-4 border-t border-border bg-card">
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="shrink-0">
@@ -248,11 +366,7 @@ Key behaviors:
                   }
                 }}
               />
-              <Button 
-                size="icon" 
-                onClick={handleTestSend}
-                disabled={!testInput.trim() || isThinking}
-              >
+              <Button size="icon" onClick={handleTestSend} disabled={!testInput.trim() || isThinking}>
                 <Send className="h-4 w-4" />
               </Button>
             </div>
