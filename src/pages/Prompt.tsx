@@ -383,39 +383,35 @@ export default function Prompt() {
 
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
-              {testMessages.map((message) => {
-                const showStageBadge = !message.isSystem && Boolean(message.stageTag);
-                const spacingClass = showStageBadge ? "pt-7 pr-2" : "";
-
-                return (
+              {testMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}
+                >
                   <div
-                    key={message.id}
-                    className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}
+                    className={`relative max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                      message.isUser
+                        ? "bg-primary text-primary-foreground"
+                        : message.isSystem
+                          ? "bg-muted text-muted-foreground border border-dashed border-border"
+                          : "bg-card border border-border"
+                    }`}
                   >
-                    <div
-                      className={`relative max-w-[85%] rounded-2xl px-4 py-2.5 ${spacingClass} ${
-                        message.isUser
-                          ? "bg-primary text-primary-foreground"
-                          : message.isSystem
-                            ? "bg-muted text-muted-foreground border border-dashed border-border"
-                            : "bg-card border border-border"
-                      }`}
-                    >
-                      {showStageBadge && (
-                        <div className="pointer-events-none absolute -top-4 right-3">
-                          <StageBadge
-                            stage={message.stageTag}
-                            className="rounded-full px-2 py-0.5 text-[10px] shadow-sm ring-1 ring-black/5 dark:ring-white/10"
-                          />
-                        </div>
-                      )}
-                      <p className={`text-sm ${message.isSystem ? "italic" : ""}`}>
-                        {message.content}
-                      </p>
-                    </div>
+                    {!message.isSystem && message.stageTag && (
+                      <div className="absolute -top-3 right-3">
+                        <StageBadge
+                          stage={message.stageTag}
+                          variant="solid"
+                          className="rounded-full px-2 py-0.5 text-[10px] shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                        />
+                      </div>
+                    )}
+                    <p className={`text-sm ${message.isSystem ? "italic" : ""}`}>
+                      {message.content}
+                    </p>
                   </div>
-                );
-              })}
+                </div>
+              ))}
               <div ref={endOfMessagesRef} />
               {isThinking && (
                 <div className="flex justify-start">
