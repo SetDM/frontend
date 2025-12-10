@@ -28,4 +28,5 @@ export const USER_ENDPOINTS = {
 export const PROMPT_ENDPOINTS = {
   system: `${API_BASE_URL}/prompts/system`,
   user: `${API_BASE_URL}/prompts/user`,
+  userTest: `${API_BASE_URL}/prompts/user/test`,
 };

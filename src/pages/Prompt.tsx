@@ -31,7 +31,19 @@ interface TestMessage {
   id: string;
   content: string;
   isUser: boolean;
+  isSystem?: boolean;
 }
+
+const INITIAL_TEST_MESSAGES: TestMessage[] = [
+  {
+    id: "intro",
+    content: "Start by sending a test message to see how your AI responds.",
+    isUser: false,
+    isSystem: true,
+  },
+];
+
+const createMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export default function Prompt() {
   usePageTitle("Prompt");
@@ -42,13 +54,7 @@ export default function Prompt() {
   const [isSaving, setIsSaving] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
 
-  const [testMessages, setTestMessages] = useState<TestMessage[]>([
-    {
-      id: "1",
-      content: "Start by sending a test message to see how your AI responds.",
-      isUser: false,
-    },
-  ]);
+  const [testMessages, setTestMessages] = useState<TestMessage[]>(INITIAL_TEST_MESSAGES);
   const [testInput, setTestInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -134,12 +140,33 @@ export default function Prompt() {
     }
   };
 
-  const handleTestSend = () => {
-    if (!testInput.trim()) return;
+  const buildHistoryPayload = useCallback(
+    (messages: TestMessage[]) =>
+      messages
+        .filter((msg) => !msg.isSystem)
+        .map((msg) => ({
+          role: msg.isUser ? "user" : "assistant",
+          content: msg.content,
+        })),
+    []
+  );
 
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [testMessages]);
+
+  const handleTestSend = async () => {
+    const trimmedInput = testInput.trim();
+    if (!trimmedInput || isThinking) {
+      return;
+    }
+
+    const historyPayload = buildHistoryPayload(testMessages);
     const userMessage: TestMessage = {
-      id: Date.now().toString(),
-      content: testInput,
+      id: createMessageId(),
+      content: trimmedInput,
       isUser: true,
     };
 
@@ -147,16 +174,55 @@ export default function Prompt() {
     setTestInput("");
     setIsThinking(true);
 
-    setTimeout(() => {
+    try {
+      const response = await authorizedFetch(PROMPT_ENDPOINTS.userTest, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: trimmedInput,
+          history: historyPayload,
+          sections,
+        }),
+      });
+
+      const payload = (await response
+        .json()
+        .catch(() => null)) as { reply?: string; message?: string } | null;
+
+      if (!response.ok) {
+        const message = payload?.message || "Failed to run prompt test.";
+        throw new Error(message);
+      }
+
+      const replyText = payload?.reply?.trim();
       const aiResponse: TestMessage = {
-        id: (Date.now() + 1).toString(),
+        id: createMessageId(),
         content:
-          "Hey! Thanks for reaching out 💪 I'd love to learn more about your fitness goals. What's been your biggest challenge lately when it comes to staying consistent with training?",
+          replyText && replyText.length
+            ? replyText
+            : "The AI returned an empty response. Double-check your prompt configuration.",
         isUser: false,
       };
+
       setTestMessages((prev) => [...prev, aiResponse]);
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Failed to run prompt test.");
+      setTestMessages((prev) => [
+        ...prev,
+        {
+          id: createMessageId(),
+          content:
+            "We couldn't contact the AI tester. Please verify your internet connection and try again.",
+          isUser: false,
+          isSystem: true,
+        },
+      ]);
+    } finally {
       setIsThinking(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -290,10 +356,14 @@ export default function Prompt() {
                     className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
                       message.isUser
                         ? "bg-primary text-primary-foreground"
-                        : "bg-card border border-border"
+                        : message.isSystem
+                          ? "bg-muted text-muted-foreground border border-dashed border-border"
+                          : "bg-card border border-border"
                     }`}
                   >
-                    <p className="text-sm">{message.content}</p>
+                    <p className={`text-sm ${message.isSystem ? "italic" : ""}`}>
+                      {message.content}
+                    </p>
                   </div>
                 </div>
               ))}
