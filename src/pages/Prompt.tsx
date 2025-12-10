@@ -50,13 +50,11 @@ const INITIAL_TEST_MESSAGES: TestMessage[] = [
 const createMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const STAGE_OPTIONS: { value: FunnelStage; label: string }[] = [
+  { value: "responded", label: "Responded" },
   { value: "lead", label: "Lead" },
   { value: "qualified", label: "Qualified" },
   { value: "booking-sent", label: "Booking Sent" },
   { value: "call-booked", label: "Call Booked" },
-  { value: "sale", label: "Sale" },
-  { value: "responded", label: "Responded" },
-  { value: "flagged", label: "Flagged" },
 ];
 
 export default function Prompt() {
@@ -71,7 +69,7 @@ export default function Prompt() {
   const [testMessages, setTestMessages] = useState<TestMessage[]>(INITIAL_TEST_MESSAGES);
   const [testInput, setTestInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
-  const [activeStage, setActiveStage] = useState<FunnelStage>("lead");
+  const [activeStage, setActiveStage] = useState<FunnelStage>("responded");
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
   const { coachName, leadSequence, qualificationSequence, bookingSequence } = sections;
@@ -385,34 +383,39 @@ export default function Prompt() {
 
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
-              {testMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}
-                >
+              {testMessages.map((message) => {
+                const showStageBadge = !message.isSystem && Boolean(message.stageTag);
+                const spacingClass = showStageBadge ? "pt-7 pr-2" : "";
+
+                return (
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                      message.isUser
-                        ? "bg-primary text-primary-foreground"
-                        : message.isSystem
-                          ? "bg-muted text-muted-foreground border border-dashed border-border"
-                          : "bg-card border border-border"
-                    }`}
+                    key={message.id}
+                    className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}
                   >
-                    {!message.isSystem && message.stageTag && (
-                      <div className="mb-2 flex justify-end">
-                        <StageBadge
-                          stage={message.stageTag}
-                          className="rounded-full px-2.5 py-0.5 text-[11px] shadow-sm ring-1 ring-black/5 dark:ring-white/10"
-                        />
-                      </div>
-                    )}
-                    <p className={`text-sm ${message.isSystem ? "italic" : ""}`}>
-                      {message.content}
-                    </p>
+                    <div
+                      className={`relative max-w-[85%] rounded-2xl px-4 py-2.5 ${spacingClass} ${
+                        message.isUser
+                          ? "bg-primary text-primary-foreground"
+                          : message.isSystem
+                            ? "bg-muted text-muted-foreground border border-dashed border-border"
+                            : "bg-card border border-border"
+                      }`}
+                    >
+                      {showStageBadge && (
+                        <div className="pointer-events-none absolute -top-4 right-3">
+                          <StageBadge
+                            stage={message.stageTag}
+                            className="rounded-full px-2 py-0.5 text-[10px] shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                          />
+                        </div>
+                      )}
+                      <p className={`text-sm ${message.isSystem ? "italic" : ""}`}>
+                        {message.content}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={endOfMessagesRef} />
               {isThinking && (
                 <div className="flex justify-start">
