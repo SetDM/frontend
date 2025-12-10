@@ -20,10 +20,6 @@ The development server runs on <http://localhost:5173> by default. Update `src/l
 - `npm run preview` – preview the production build locally
 - `npm run lint` – run ESLint with the project configuration
 
-## Deployment
-
-The app is optimized for static hosting providers such as Netlify or Vercel. When deploying to Netlify, ensure `npm run build` is used as the build command and `dist` is the publish directory. For single-page app routing, include the `_redirects` file in `public/` (already present) so deep links resolve to `index.html`.
-
 ## Realtime Data
 
 - The Messages workspace connects to the backend through `socket.io-client` when the “Live updates” toggle is on. Make sure the `BACKEND_URL` in `src/lib/config.ts` points to a server that allows WebSocket upgrades and lists your Netlify domain inside the backend CORS allow list.
