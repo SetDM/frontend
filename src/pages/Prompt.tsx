@@ -10,6 +10,9 @@ import { Send, Plus, Sparkles } from "lucide-react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
 import { PROMPT_ENDPOINTS } from "@/lib/config";
+import { StageBadge } from "@/components/StageBadge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { FunnelStage } from "@/types";
 
 const DEFAULT_COACH_NAME = "Iris";
 
@@ -32,6 +35,7 @@ interface TestMessage {
   content: string;
   isUser: boolean;
   isSystem?: boolean;
+  stageTag?: FunnelStage;
 }
 
 const INITIAL_TEST_MESSAGES: TestMessage[] = [
@@ -45,6 +49,16 @@ const INITIAL_TEST_MESSAGES: TestMessage[] = [
 
 const createMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+const STAGE_OPTIONS: { value: FunnelStage; label: string }[] = [
+  { value: "lead", label: "Lead" },
+  { value: "qualified", label: "Qualified" },
+  { value: "booking-sent", label: "Booking Sent" },
+  { value: "call-booked", label: "Call Booked" },
+  { value: "sale", label: "Sale" },
+  { value: "responded", label: "Responded" },
+  { value: "flagged", label: "Flagged" },
+];
+
 export default function Prompt() {
   usePageTitle("Prompt");
   const { authorizedFetch } = useAuth();
@@ -57,7 +71,8 @@ export default function Prompt() {
   const [testMessages, setTestMessages] = useState<TestMessage[]>(INITIAL_TEST_MESSAGES);
   const [testInput, setTestInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeStage, setActiveStage] = useState<FunnelStage>("lead");
+  const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
   const { coachName, leadSequence, qualificationSequence, bookingSequence } = sections;
 
@@ -131,7 +146,11 @@ export default function Prompt() {
         });
       }
 
-      toast.success("Prompt updated successfully!");
+      toast.success("Prompt updated successfully!", {
+        position: "top-right",
+        className:
+          "data-[state=open]:animate-in data-[state=open]:slide-in-from-top-5 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-top-3",
+      });
     } catch (error) {
       console.error(error);
       toast.error(error instanceof Error ? error.message : "Failed to save prompt.");
@@ -152,9 +171,9 @@ export default function Prompt() {
   );
 
   useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    node.scrollTop = node.scrollHeight;
+    requestAnimationFrame(() => {
+      endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
   }, [testMessages]);
 
   const handleTestSend = async () => {
@@ -184,6 +203,7 @@ export default function Prompt() {
           message: trimmedInput,
           history: historyPayload,
           sections,
+          stageTag: activeStage,
         }),
       });
 
@@ -204,6 +224,7 @@ export default function Prompt() {
             ? replyText
             : "The AI returned an empty response. Double-check your prompt configuration.",
         isUser: false,
+        stageTag: activeStage,
       };
 
       setTestMessages((prev) => [...prev, aiResponse]);
@@ -343,9 +364,26 @@ export default function Prompt() {
                 <span>Test Mode</span>
               </div>
             </div>
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                Stage context
+              </span>
+              <Select value={activeStage} onValueChange={(value) => setActiveStage(value as FunnelStage)}>
+                <SelectTrigger className="h-9 w-[170px] text-sm">
+                  <SelectValue placeholder="Select stage" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {STAGE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+          <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
               {testMessages.map((message) => (
                 <div
@@ -361,12 +399,21 @@ export default function Prompt() {
                           : "bg-card border border-border"
                     }`}
                   >
+                    {!message.isSystem && message.stageTag && (
+                      <div className="mb-2 flex justify-end">
+                        <StageBadge
+                          stage={message.stageTag}
+                          className="rounded-full px-2.5 py-0.5 text-[11px] shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                        />
+                      </div>
+                    )}
                     <p className={`text-sm ${message.isSystem ? "italic" : ""}`}>
                       {message.content}
                     </p>
                   </div>
                 </div>
               ))}
+              <div ref={endOfMessagesRef} />
               {isThinking && (
                 <div className="flex justify-start">
                   <div className="bg-card border border-border rounded-2xl px-4 py-2.5">
