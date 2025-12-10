@@ -401,7 +401,6 @@ export default function Prompt() {
                       <div className="absolute -top-3 right-3">
                         <StageBadge
                           stage={message.stageTag}
-                          variant="solid"
                           className="rounded-full px-2 py-0.5 text-[10px] shadow-sm ring-1 ring-black/5 dark:ring-white/10"
                         />
                       </div>
