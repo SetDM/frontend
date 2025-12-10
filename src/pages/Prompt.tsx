@@ -4,7 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, ChangeEvent } from "react";
 import { toast } from "sonner";
 import { Send, Plus, Sparkles } from "lucide-react";
 import { usePageTitle } from "@/hooks/usePageTitle";
@@ -13,44 +13,18 @@ import { PROMPT_ENDPOINTS } from "@/lib/config";
 
 const DEFAULT_COACH_NAME = "Iris";
 
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const extractBlock = (source: string, label: string) => {
-  const pattern = new RegExp(`\\[${escapeRegex(label)}\\]\\s*\\{([\\s\\S]*?)\\}`, "i");
-  const match = source.match(pattern);
-  return match ? match[1].trim() : "";
+type PromptSections = {
+  coachName: string;
+  leadSequence: string;
+  qualificationSequence: string;
+  bookingSequence: string;
 };
 
-const replaceBlock = (source: string, label: string, nextValue: string) => {
-  const pattern = new RegExp(`(\\[${escapeRegex(label)}\\]\\s*\\{)([\\s\\S]*?)(\\})`, "i");
-  const normalizedValue = nextValue.trim();
-
-  if (pattern.test(source)) {
-    return source.replace(pattern, (_match, start, _current, end) => {
-      const body = normalizedValue ? `\n${normalizedValue}\n` : "\n";
-      return `${start}${body}${end}`;
-    });
-  }
-
-  return `${source}\n\nThis is the variable [${label}] {\n${normalizedValue}\n}`;
-};
-
-const extractCoachName = (source: string) => {
-  const match = source.match(/Coach Name:\s*(.+)/i);
-  return match?.[1]?.trim() || DEFAULT_COACH_NAME;
-};
-
-const upsertCoachNameLine = (source: string, coachName: string) => {
-  const safeName = coachName.trim();
-  if (!safeName) {
-    return source;
-  }
-
-  if (/Coach Name:/i.test(source)) {
-    return source.replace(/Coach Name:\s*.*/i, `Coach Name: ${safeName}`);
-  }
-
-  return `Coach Name: ${safeName}\n\n${source}`;
+const DEFAULT_SECTIONS: PromptSections = {
+  coachName: DEFAULT_COACH_NAME,
+  leadSequence: "",
+  qualificationSequence: "",
+  bookingSequence: ""
 };
 
 interface TestMessage {
@@ -62,13 +36,8 @@ interface TestMessage {
 export default function Prompt() {
   usePageTitle("Prompt");
   const { authorizedFetch } = useAuth();
-  const promptAdminToken = import.meta.env.VITE_PROMPT_ADMIN_TOKEN;
 
-  const [coachName, setCoachName] = useState(DEFAULT_COACH_NAME);
-  const [leadSequence, setLeadSequence] = useState("");
-  const [qualificationSequence, setQualificationSequence] = useState("");
-  const [bookingSequence, setBookingSequence] = useState("");
-  const [rawPrompt, setRawPrompt] = useState("");
+  const [sections, setSections] = useState<PromptSections>(DEFAULT_SECTIONS);
   const [isFetchingPrompt, setIsFetchingPrompt] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -84,34 +53,34 @@ export default function Prompt() {
   const [isThinking, setIsThinking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const hydratePrompt = useCallback(async () => {
-    if (!promptAdminToken) {
-      setPromptError("Prompt admin token is not configured.");
-      setIsFetchingPrompt(false);
-      return;
-    }
+  const { coachName, leadSequence, qualificationSequence, bookingSequence } = sections;
 
+  const handleSectionChange =
+    (key: keyof PromptSections) =>
+    (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { value } = event.target;
+      setSections((prev) => ({ ...prev, [key]: value }));
+    };
+
+  const hydratePrompt = useCallback(async () => {
     try {
       setPromptError(null);
       setIsFetchingPrompt(true);
-      const response = await authorizedFetch(PROMPT_ENDPOINTS.system, {
-        headers: {
-          "x-admin-token": promptAdminToken,
-        },
-      });
+      const response = await authorizedFetch(PROMPT_ENDPOINTS.user);
 
       if (!response.ok) {
         throw new Error("Failed to load prompt configuration.");
       }
 
-      const payload = (await response.json()) as { content?: string };
-      const content = payload?.content || "";
+      const payload = (await response.json()) as { sections?: Partial<PromptSections> };
+      const nextSections: PromptSections = {
+        coachName: payload.sections?.coachName ?? DEFAULT_COACH_NAME,
+        leadSequence: payload.sections?.leadSequence ?? "",
+        qualificationSequence: payload.sections?.qualificationSequence ?? "",
+        bookingSequence: payload.sections?.bookingSequence ?? ""
+      };
 
-      setRawPrompt(content);
-      setLeadSequence(extractBlock(content, "lead sequence"));
-      setQualificationSequence(extractBlock(content, "qualification sequence"));
-      setBookingSequence(extractBlock(content, "booking sequence"));
-      setCoachName(extractCoachName(content));
+      setSections(nextSections);
     } catch (error) {
       console.error(error);
       setPromptError(
@@ -120,38 +89,21 @@ export default function Prompt() {
     } finally {
       setIsFetchingPrompt(false);
     }
-  }, [authorizedFetch, promptAdminToken]);
+  }, [authorizedFetch]);
 
   useEffect(() => {
     hydratePrompt();
   }, [hydratePrompt]);
 
   const handleSave = async () => {
-    if (!promptAdminToken) {
-      toast.error("Prompt admin token is not configured.");
-      return;
-    }
-
-    if (!rawPrompt.trim()) {
-      toast.error("Prompt template has not loaded yet.");
-      return;
-    }
-
     setIsSaving(true);
     try {
-      let updatedPrompt = rawPrompt;
-      updatedPrompt = replaceBlock(updatedPrompt, "lead sequence", leadSequence);
-      updatedPrompt = replaceBlock(updatedPrompt, "qualification sequence", qualificationSequence);
-      updatedPrompt = replaceBlock(updatedPrompt, "booking sequence", bookingSequence);
-      updatedPrompt = upsertCoachNameLine(updatedPrompt, coachName);
-
-      const response = await authorizedFetch(PROMPT_ENDPOINTS.system, {
+      const response = await authorizedFetch(PROMPT_ENDPOINTS.user, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-token": promptAdminToken,
         },
-        body: JSON.stringify({ content: updatedPrompt }),
+        body: JSON.stringify({ sections }),
       });
 
       if (!response.ok) {
@@ -163,7 +115,16 @@ export default function Prompt() {
         throw new Error(message);
       }
 
-      setRawPrompt(updatedPrompt);
+      const payload = (await response.json()) as { sections?: Partial<PromptSections> };
+      if (payload.sections) {
+        setSections({
+          coachName: payload.sections.coachName ?? DEFAULT_COACH_NAME,
+          leadSequence: payload.sections.leadSequence ?? "",
+          qualificationSequence: payload.sections.qualificationSequence ?? "",
+          bookingSequence: payload.sections.bookingSequence ?? ""
+        });
+      }
+
       toast.success("Prompt updated successfully!");
     } catch (error) {
       console.error(error);
@@ -222,7 +183,7 @@ export default function Prompt() {
                   <Input
                     id="coach-name"
                     value={coachName}
-                    onChange={(e) => setCoachName(e.target.value)}
+                    onChange={handleSectionChange("coachName")}
                     placeholder="Your name"
                     className="mt-1"
                     disabled={isFetchingPrompt}
@@ -242,7 +203,7 @@ export default function Prompt() {
                   <Textarea
                     id="lead-sequence"
                     value={leadSequence}
-                    onChange={(e) => setLeadSequence(e.target.value)}
+                    onChange={handleSectionChange("leadSequence")}
                     placeholder="Define the lead sequence"
                     className="mt-1 min-h-[200px] font-mono text-sm"
                     disabled={isFetchingPrompt}
@@ -262,7 +223,7 @@ export default function Prompt() {
                   <Textarea
                     id="qualification-sequence"
                     value={qualificationSequence}
-                    onChange={(e) => setQualificationSequence(e.target.value)}
+                    onChange={handleSectionChange("qualificationSequence")}
                     placeholder="Define the qualification sequence"
                     className="mt-1 min-h-[200px] font-mono text-sm"
                     disabled={isFetchingPrompt}
@@ -282,7 +243,7 @@ export default function Prompt() {
                   <Textarea
                     id="booking-sequence"
                     value={bookingSequence}
-                    onChange={(e) => setBookingSequence(e.target.value)}
+                    onChange={handleSectionChange("bookingSequence")}
                     placeholder="Define the booking sequence"
                     className="mt-1 min-h-[200px] font-mono text-sm"
                     disabled={isFetchingPrompt}
