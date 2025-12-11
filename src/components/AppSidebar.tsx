@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { 
@@ -8,11 +7,22 @@ import {
   FileText, 
   Settings, 
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Plus
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/logo.svg";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -22,8 +32,7 @@ const navItems = [
 ];
 
 export function AppSidebar() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user, workspaces, activeWorkspaceId, switchWorkspace, redirectToLogin, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const initials = user?.username
@@ -40,7 +49,6 @@ export function AppSidebar() {
     setIsLoggingOut(true);
     await logout();
     setIsLoggingOut(false);
-    navigate("/login", { replace: true });
   };
 
   return (
@@ -53,22 +61,69 @@ export function AppSidebar() {
 
       {/* Workspace Selector */}
       <div className="border-b border-sidebar-border p-3">
-        <button className="flex w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent/80">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 text-left">
-            <div className="font-medium text-foreground">
-              {user?.username || "Loading"}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {user?.accountType || "Instagram"}
-            </div>
-          </div>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent/80 focus:outline-none"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 text-left">
+                <div className="font-medium text-foreground">
+                  {user?.username || "Select workspace"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {user?.accountType || "Instagram"}
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-64" align="start">
+            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+            {workspaces.length > 0 ? (
+              <DropdownMenuRadioGroup
+                value={activeWorkspaceId ?? undefined}
+                onValueChange={(value) => {
+                  void switchWorkspace(value);
+                }}
+              >
+                {workspaces.map((workspace) => (
+                  <DropdownMenuRadioItem
+                    key={workspace.instagramId}
+                    value={workspace.instagramId}
+                    className="flex flex-col items-start gap-0.5 py-2"
+                  >
+                    <span className="text-sm font-medium text-foreground">
+                      {workspace.username}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      @{workspace.instagramId}
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            ) : (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                Connect an Instagram account to get started.
+              </div>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="gap-2"
+              onSelect={() => {
+                redirectToLogin();
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Connect new workspace
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Navigation */}

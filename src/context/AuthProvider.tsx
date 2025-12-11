@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AuthUser } from "@/types";
 import { AUTH_ENDPOINTS } from "@/lib/config";
 import { AuthContext } from "@/context/AuthContext";
 import { apiFetch, type ApiFetchOptions } from "@/lib/apiClient";
 import {
   extractAuthTokenFromUrl,
-  getStoredAuthToken,
-  persistAuthToken,
+  getStoredWorkspaceState,
+  persistWorkspaceState,
+  type StoredWorkspaceAccount,
+  type WorkspaceStorageState,
 } from "@/lib/authToken";
 
 type AuthApiResponse = AuthUser | { user: AuthUser | null } | null;
@@ -45,79 +47,193 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [workspaceState, setWorkspaceState] = useState<WorkspaceStorageState>(() =>
+    getStoredWorkspaceState(),
+  );
+  const workspaceStateRef = useRef(workspaceState);
+  const [pendingToken, setPendingToken] = useState<string | null>(() => extractAuthTokenFromUrl());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [authToken, setAuthTokenState] = useState<string | null>(() => {
-    const tokenFromUrl = extractAuthTokenFromUrl();
-    if (tokenFromUrl) {
-      persistAuthToken(tokenFromUrl);
-      return tokenFromUrl;
-    }
 
-    return getStoredAuthToken();
-  });
+  useEffect(() => {
+    workspaceStateRef.current = workspaceState;
+  }, [workspaceState]);
 
-  const setAuthToken = useCallback((token: string | null) => {
-    setAuthTokenState(token);
-    persistAuthToken(token);
-  }, []);
+  useEffect(() => {
+    persistWorkspaceState(workspaceState);
+  }, [workspaceState]);
 
-  const refreshUser = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const tokenToUse = authToken ?? getStoredAuthToken();
-      const response = await apiFetch(AUTH_ENDPOINTS.me, {
-        authToken: tokenToUse ?? undefined,
-      });
+  const hydrateWorkspace = useCallback(
+    async (options?: {
+      instagramId?: string | null;
+      token?: string | null;
+      makeActive?: boolean;
+      silent?: boolean;
+    }) => {
+      const snapshot = workspaceStateRef.current;
+      const targetId = options?.instagramId ?? snapshot.activeWorkspaceId;
+      const tokenFromState = targetId ? snapshot.workspaces[targetId]?.token : null;
+      const tokenToUse = options?.token ?? tokenFromState;
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          setUser(null);
-          setError(null);
-          setAuthToken(null);
-          return false;
+      if (!tokenToUse) {
+        if (!options?.silent) {
+          setIsLoading(false);
         }
-        throw new Error("Unable to fetch the current user.");
-      }
-
-      const data = (await response.json()) as AuthApiResponse & { token?: string };
-      const normalizedUser = extractUser(data);
-
-      if (!normalizedUser) {
-        setUser(null);
-        setError(null);
         return false;
       }
 
-      setUser(normalizedUser);
-      if (normalizedUser.token) {
-        setAuthToken(normalizedUser.token);
+      if (!options?.silent) {
+        setIsLoading(true);
       }
-      setError(null);
-      return true;
-    } catch (err) {
-      console.error("Failed to refresh auth session", err);
-      setUser(null);
-      setError(err instanceof Error ? err.message : "Unknown authentication error.");
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [authToken, setAuthToken]);
 
-  const logout = useCallback(async () => {
-    try {
-      await apiFetch(AUTH_ENDPOINTS.logout, {
-        method: "POST",
-      });
-    } catch (err) {
-      console.error("Failed to logout", err);
-    } finally {
-      setUser(null);
-      setAuthToken(null);
+      try {
+        const response = await apiFetch(AUTH_ENDPOINTS.me, {
+          authToken: tokenToUse,
+        });
+
+        if (!response.ok) {
+          if (response.status === 401 && targetId) {
+            setWorkspaceState((prev) => {
+              const nextWorkspaces = { ...prev.workspaces };
+              delete nextWorkspaces[targetId];
+              const nextActiveId =
+                prev.activeWorkspaceId === targetId
+                  ? Object.keys(nextWorkspaces)[0] ?? null
+                  : prev.activeWorkspaceId;
+              return {
+                activeWorkspaceId: nextActiveId,
+                workspaces: nextWorkspaces,
+              };
+            });
+          }
+          throw new Error("Unable to fetch the current user.");
+        }
+
+        const data = (await response.json()) as AuthApiResponse & { token?: string };
+        const normalizedUser = extractUser(data);
+
+        if (!normalizedUser) {
+          throw new Error("Unable to resolve authenticated Instagram account.");
+        }
+
+        const workspaceEntry: StoredWorkspaceAccount = {
+          ...normalizedUser,
+          token: normalizedUser.token ?? tokenToUse,
+        };
+
+        setWorkspaceState((prev) => {
+          const nextWorkspaces = { ...prev.workspaces };
+          if (targetId && targetId !== workspaceEntry.instagramId) {
+            delete nextWorkspaces[targetId];
+          }
+          nextWorkspaces[workspaceEntry.instagramId] = workspaceEntry;
+
+          const shouldActivate =
+            options?.makeActive === true ||
+            !prev.activeWorkspaceId ||
+            prev.activeWorkspaceId === targetId ||
+            prev.activeWorkspaceId === workspaceEntry.instagramId;
+
+          return {
+            activeWorkspaceId: shouldActivate ? workspaceEntry.instagramId : prev.activeWorkspaceId,
+            workspaces: nextWorkspaces,
+          };
+        });
+
+        setError(null);
+        return true;
+      } catch (err) {
+        console.error("Failed to hydrate workspace", err);
+        if (!options?.silent) {
+          setError(err instanceof Error ? err.message : "Unknown authentication error.");
+        }
+        return false;
+      } finally {
+        if (!options?.silent) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const refreshUser = useCallback(
+    async (instagramId?: string, options?: { silent?: boolean }) => {
+      const snapshot = workspaceStateRef.current;
+      const targetId = instagramId ?? snapshot.activeWorkspaceId;
+
+      if (!targetId) {
+        if (!options?.silent) {
+          setIsLoading(false);
+        }
+        return false;
+      }
+
+      return hydrateWorkspace({ instagramId: targetId, makeActive: true, silent: options?.silent });
+    },
+    [hydrateWorkspace],
+  );
+
+  useEffect(() => {
+    if (!pendingToken) {
+      return;
     }
-  }, [setAuthToken]);
+
+    let cancelled = false;
+
+    const attachWorkspace = async () => {
+      await hydrateWorkspace({ token: pendingToken, makeActive: true });
+      if (!cancelled) {
+        setPendingToken(null);
+      }
+    };
+
+    attachWorkspace();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingToken, hydrateWorkspace]);
+
+  useEffect(() => {
+    if (pendingToken) {
+      return;
+    }
+
+    refreshUser();
+  }, [pendingToken, refreshUser]);
+
+  const logout = useCallback(
+    async (instagramId?: string) => {
+      const snapshot = workspaceStateRef.current;
+      const targetId = instagramId ?? snapshot.activeWorkspaceId;
+      if (!targetId) {
+        return;
+      }
+
+      const token = snapshot.workspaces[targetId]?.token;
+
+      try {
+        await apiFetch(AUTH_ENDPOINTS.logout, {
+          method: "POST",
+          authToken: token,
+        });
+      } catch (err) {
+        console.error("Failed to logout", err);
+      } finally {
+        setWorkspaceState((prev) => {
+          const nextWorkspaces = { ...prev.workspaces };
+          delete nextWorkspaces[targetId];
+          const nextActiveId =
+            prev.activeWorkspaceId === targetId ? Object.keys(nextWorkspaces)[0] ?? null : prev.activeWorkspaceId;
+          return {
+            activeWorkspaceId: nextActiveId,
+            workspaces: nextWorkspaces,
+          };
+        });
+      }
+    },
+    []);
 
   const redirectToLogin = useCallback(() => {
     window.location.href = AUTH_ENDPOINTS.login;
@@ -125,28 +241,82 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const clearError = useCallback(() => setError(null), []);
 
-  useEffect(() => {
-    refreshUser();
-  }, [refreshUser]);
+  const switchWorkspace = useCallback(
+    async (instagramId: string) => {
+      if (!instagramId || instagramId === workspaceStateRef.current.activeWorkspaceId) {
+        return true;
+      }
 
-  const resolvedToken = useMemo(() => {
-    return authToken ?? user?.token ?? getStoredAuthToken();
-  }, [authToken, user?.token]);
+      if (!workspaceStateRef.current.workspaces[instagramId]) {
+        return false;
+      }
+
+      setWorkspaceState((prev) => ({
+        ...prev,
+        activeWorkspaceId: instagramId,
+      }));
+
+      return refreshUser(instagramId, { silent: true });
+    },
+    [refreshUser],
+  );
 
   const authorizedFetch = useCallback(
     (input: RequestInfo | URL, options?: Omit<ApiFetchOptions, "authToken">) => {
-      return apiFetch(input, { ...options, authToken: resolvedToken ?? undefined });
+      const snapshot = workspaceStateRef.current;
+      const activeToken = snapshot.activeWorkspaceId
+        ? snapshot.workspaces[snapshot.activeWorkspaceId]?.token
+        : null;
+      return apiFetch(input, { ...options, authToken: activeToken ?? undefined });
     },
-    [resolvedToken],
+    [],
   );
+
+  const activeWorkspace = useMemo(() => {
+    const snapshot = workspaceState;
+    if (!snapshot.activeWorkspaceId) {
+      return null;
+    }
+    return snapshot.workspaces[snapshot.activeWorkspaceId] ?? null;
+  }, [workspaceState]);
+
+  const user = useMemo(() => {
+    if (!activeWorkspace) {
+      return null;
+    }
+    const { token: _token, ...rest } = activeWorkspace;
+    return rest;
+  }, [activeWorkspace]);
+
+  const authToken = activeWorkspace?.token ?? null;
+
+  const workspaces = useMemo(() => {
+    const resolveTimestamp = (value?: string) => {
+      if (!value) {
+        return 0;
+      }
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    return Object.values(workspaceState.workspaces)
+      .map((workspace) => {
+        const { token: _token, ...rest } = workspace;
+        return rest;
+      })
+      .sort((a, b) => resolveTimestamp(b.lastLoginAt) - resolveTimestamp(a.lastLoginAt));
+  }, [workspaceState.workspaces]);
 
   const value = useMemo(
     () => ({
       user,
+      workspaces,
+      activeWorkspaceId: workspaceState.activeWorkspaceId,
       isLoading,
       error,
-      authToken: resolvedToken ?? null,
+      authToken,
       refreshUser,
+      switchWorkspace,
       redirectToLogin,
       logout,
       clearError,
@@ -154,10 +324,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }),
     [
       user,
+      workspaces,
+      workspaceState.activeWorkspaceId,
       isLoading,
       error,
-      resolvedToken,
+      authToken,
       refreshUser,
+      switchWorkspace,
       redirectToLogin,
       logout,
       clearError,

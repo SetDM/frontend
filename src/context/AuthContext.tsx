@@ -4,12 +4,15 @@ import type { ApiFetchOptions } from "@/lib/apiClient";
 
 export interface AuthContextValue {
   user: AuthUser | null;
+  workspaces: AuthUser[];
+  activeWorkspaceId: string | null;
   isLoading: boolean;
   error: string | null;
   authToken: string | null;
-  refreshUser: () => Promise<boolean>;
+  refreshUser: (instagramId?: string, options?: { silent?: boolean }) => Promise<boolean>;
+  switchWorkspace: (instagramId: string) => Promise<boolean>;
   redirectToLogin: () => void;
-  logout: () => Promise<void>;
+  logout: (instagramId?: string) => Promise<void>;
   clearError: () => void;
   authorizedFetch: (input: RequestInfo | URL, options?: Omit<ApiFetchOptions, "authToken">) => Promise<Response>;
 }
