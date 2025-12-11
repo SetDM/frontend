@@ -5,6 +5,7 @@ export const AUTH_ENDPOINTS = {
   login: `${API_BASE_URL}/auth/instagram`,
   me: `${API_BASE_URL}/auth/me`,
   logout: `${API_BASE_URL}/auth/logout`,
+  unlink: `${API_BASE_URL}/auth/unlink`,
 };
 
 export const CONVERSATION_ENDPOINTS = {

@@ -18,12 +18,16 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { useAuth } from "@/hooks/useAuth";
+import { AUTH_ENDPOINTS } from "@/lib/config";
 
 export default function Settings() {
   usePageTitle("Settings");
+  const { user, authorizedFetch, logout, redirectToLogin } = useAuth();
   const [coachName, setCoachName] = useState("Iris");
   const [brandName, setBrandName] = useState("FitWithIris");
   const [calendarLink, setCalendarLink] = useState("");
+  const [isUnlinking, setIsUnlinking] = useState(false);
 
   // Autopilot settings
   const [autopilotMode, setAutopilotMode] = useState("full");
@@ -51,6 +55,48 @@ export default function Settings() {
 
   const handleSave = () => {
     toast.success("Settings saved successfully!");
+  };
+
+  const handleConnectInstagram = () => {
+    redirectToLogin();
+  };
+
+  const handleUnlinkInstagram = async () => {
+    const confirmation = window.confirm(
+      "Disconnecting will remove access for this Instagram account. Continue?"
+    );
+
+    if (!confirmation) {
+      return;
+    }
+
+    setIsUnlinking(true);
+
+    try {
+      const response = await authorizedFetch(AUTH_ENDPOINTS.unlink, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message =
+          (payload && typeof payload === "object" && "message" in payload
+            ? (payload as { message?: string }).message
+            : null) || "Failed to disconnect Instagram account.";
+        throw new Error(message);
+      }
+
+      toast.success("Instagram account disconnected. Please log in again to reconnect.");
+      await logout();
+      redirectToLogin();
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to disconnect Instagram account."
+      );
+    } finally {
+      setIsUnlinking(false);
+    }
   };
 
   return (
@@ -113,9 +159,42 @@ export default function Settings() {
                   </p>
                 </div>
               </div>
-              <Button className="w-full bg-gradient-to-r from-pink to-purple-500 hover:opacity-90">
-                Connect Instagram
-              </Button>
+              {user ? (
+                <>
+                  <div className="mb-3 rounded-md border border-dashed border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between">
+                      <span>Connected as</span>
+                      <span className="font-medium text-foreground">@{user.username}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Instagram ID: {user.instagramId}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      className="flex-1 bg-gradient-to-r from-pink to-purple-500 hover:opacity-90"
+                      onClick={handleConnectInstagram}
+                    >
+                      Refresh Connection
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-destructive text-destructive hover:bg-destructive/5"
+                      onClick={handleUnlinkInstagram}
+                      disabled={isUnlinking}
+                    >
+                      {isUnlinking ? "Disconnecting…" : "Disconnect Instagram"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <Button
+                  className="w-full bg-gradient-to-r from-pink to-purple-500 hover:opacity-90"
+                  onClick={handleConnectInstagram}
+                >
+                  Connect Instagram
+                </Button>
+              )}
             </div>
 
             <div className="mt-4">
