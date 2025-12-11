@@ -31,3 +31,7 @@ export const PROMPT_ENDPOINTS = {
   user: `${API_BASE_URL}/prompts/user`,
   userTest: `${API_BASE_URL}/prompts/user/test`,
 };
+
+export const SETTINGS_ENDPOINTS = {
+  workspace: `${API_BASE_URL}/settings`,
+};

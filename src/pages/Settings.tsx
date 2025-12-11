@@ -15,22 +15,38 @@ import {
   Globe,
   Shield
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
-import { AUTH_ENDPOINTS } from "@/lib/config";
+import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS } from "@/lib/config";
+import type { WorkspaceSettings } from "@/types";
+
+const formatListField = (items?: string[]) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return "";
+  }
+  return items.join(", ");
+};
+
+const parseListField = (input: string) =>
+  input
+    .split(/[,\n]/)
+    .map((entry) => entry.trim())
+    .filter((entry) => Boolean(entry));
 
 export default function Settings() {
   usePageTitle("Settings");
   const { user, authorizedFetch, logout, redirectToLogin } = useAuth();
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [coachName, setCoachName] = useState("Iris");
   const [brandName, setBrandName] = useState("FitWithIris");
   const [calendarLink, setCalendarLink] = useState("");
   const [isUnlinking, setIsUnlinking] = useState(false);
 
   // Autopilot settings
-  const [autopilotMode, setAutopilotMode] = useState("full");
+  const [autopilotMode, setAutopilotMode] = useState<WorkspaceSettings["autopilot"]["mode"]>("full");
   const [replyWindowStart, setReplyWindowStart] = useState("07:00");
   const [replyWindowEnd, setReplyWindowEnd] = useState("22:00");
   const [handleStoryReplies, setHandleStoryReplies] = useState(true);
@@ -51,10 +67,178 @@ export default function Settings() {
   const [notifyQualified, setNotifyQualified] = useState(true);
   const [notifyCallBooked, setNotifyCallBooked] = useState(true);
   const [notifyNeedsReview, setNotifyNeedsReview] = useState(true);
-  const [digestFrequency, setDigestFrequency] = useState("realtime");
+  const [digestFrequency, setDigestFrequency] =
+    useState<WorkspaceSettings["notifications"]["digestFrequency"]>("realtime");
 
-  const handleSave = () => {
-    toast.success("Settings saved successfully!");
+  const applySettingsToState = useCallback((settings: WorkspaceSettings) => {
+    if (!settings) {
+      return;
+    }
+
+    setCoachName(settings.profile?.coachName ?? "");
+    setBrandName(settings.profile?.brandName ?? "");
+    setCalendarLink(settings.profile?.calendarLink ?? "");
+
+    setAutopilotMode(settings.autopilot?.mode ?? "full");
+    setReplyWindowStart(settings.autopilot?.replyWindowStart ?? "07:00");
+    setReplyWindowEnd(settings.autopilot?.replyWindowEnd ?? "22:00");
+    setHandleStoryReplies(settings.autopilot?.handleStoryReplies ?? true);
+    setHandleCTAReplies(settings.autopilot?.handleCTAReplies ?? true);
+    setHandleColdDMs(settings.autopilot?.handleColdDMs ?? false);
+    setHandoffInjuries(settings.autopilot?.handoffInjuries ?? true);
+    setHandoffAngry(settings.autopilot?.handoffAngry ?? true);
+    setHandoffQualified(settings.autopilot?.handoffQualified ?? true);
+
+    setAllowedCountries(formatListField(settings.filters?.allowedCountries));
+    setAllowedLanguages(formatListField(settings.filters?.allowedLanguages));
+    setMinAge(String(settings.filters?.minAge ?? 18));
+    setMinFollowers(
+      settings.filters?.minFollowers === null || settings.filters?.minFollowers === undefined
+        ? ""
+        : String(settings.filters.minFollowers)
+    );
+    setHidePrivateAccounts(settings.filters?.hidePrivateAccounts ?? false);
+
+    setNotifyQualified(settings.notifications?.notifyQualified ?? true);
+    setNotifyCallBooked(settings.notifications?.notifyCallBooked ?? true);
+    setNotifyNeedsReview(settings.notifications?.notifyNeedsReview ?? true);
+    setDigestFrequency(settings.notifications?.digestFrequency ?? "realtime");
+  }, []);
+
+  const loadSettings = useCallback(async () => {
+    setIsLoadingSettings(true);
+    try {
+      const response = await authorizedFetch(SETTINGS_ENDPOINTS.workspace);
+      let payload: unknown = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+
+      if (!response.ok) {
+        const message =
+          payload &&
+          typeof payload === "object" &&
+          payload !== null &&
+          "message" in payload &&
+          typeof (payload as { message?: unknown }).message === "string"
+            ? ((payload as { message?: string }).message as string)
+            : "Failed to load settings.";
+        throw new Error(message);
+      }
+
+      const data =
+        payload &&
+        typeof payload === "object" &&
+        payload !== null &&
+        "data" in payload
+          ? ((payload as { data?: WorkspaceSettings }).data as WorkspaceSettings | undefined)
+          : undefined;
+
+      if (data) {
+        applySettingsToState(data);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Failed to load settings.");
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  }, [applySettingsToState, authorizedFetch]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const buildSettingsPayload = (): WorkspaceSettings => {
+    const normalizedMinFollowers = minFollowers.trim();
+    const parsedMinFollowers = normalizedMinFollowers.length
+      ? Math.max(0, Number.parseInt(normalizedMinFollowers, 10) || 0)
+      : null;
+
+    const parsedMinAge = Math.max(0, Number.parseInt(minAge, 10) || 18);
+
+    return {
+      profile: {
+        coachName: coachName.trim(),
+        brandName: brandName.trim(),
+        calendarLink: calendarLink.trim(),
+      },
+      autopilot: {
+        mode: autopilotMode as WorkspaceSettings["autopilot"]["mode"],
+        replyWindowStart,
+        replyWindowEnd,
+        handleStoryReplies,
+        handleCTAReplies,
+        handleColdDMs,
+        handoffInjuries,
+        handoffAngry,
+        handoffQualified,
+      },
+      filters: {
+        minAge: parsedMinAge,
+        minFollowers: parsedMinFollowers,
+        hidePrivateAccounts,
+        allowedCountries: parseListField(allowedCountries),
+        allowedLanguages: parseListField(allowedLanguages),
+      },
+      notifications: {
+        notifyQualified,
+        notifyCallBooked,
+        notifyNeedsReview,
+        digestFrequency,
+      },
+    };
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const payload = buildSettingsPayload();
+      const response = await authorizedFetch(SETTINGS_ENDPOINTS.workspace, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      let responseBody: unknown = null;
+      try {
+        responseBody = await response.json();
+      } catch {
+        responseBody = null;
+      }
+
+      if (!response.ok) {
+        const message =
+          responseBody &&
+          typeof responseBody === "object" &&
+          responseBody !== null &&
+          "message" in responseBody &&
+          typeof (responseBody as { message?: unknown }).message === "string"
+            ? ((responseBody as { message?: string }).message as string)
+            : "Failed to save settings.";
+        throw new Error(message);
+      }
+
+      const updatedSettings =
+        responseBody &&
+        typeof responseBody === "object" &&
+        responseBody !== null &&
+        "data" in responseBody
+          ? ((responseBody as { data?: WorkspaceSettings }).data as WorkspaceSettings | undefined)
+          : undefined;
+
+      applySettingsToState(updatedSettings ?? payload);
+      toast.success("Settings saved successfully!");
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "Failed to save settings.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleConnectInstagram = () => {
@@ -108,6 +292,12 @@ export default function Settings() {
             Configure your account, automation rules, and notifications.
           </p>
         </div>
+
+        {isLoadingSettings && (
+          <div className="mb-6 rounded-lg border border-dashed border-border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
+            Loading workspace settings...
+          </div>
+        )}
 
         <div className="space-y-6">
           {/* A. Account & Instagram Connection */}
@@ -230,7 +420,12 @@ export default function Settings() {
               {/* Global Toggle */}
               <div>
                 <Label>Autopilot Mode</Label>
-                <Select value={autopilotMode} onValueChange={setAutopilotMode}>
+                <Select
+                  value={autopilotMode}
+                  onValueChange={(value) =>
+                    setAutopilotMode(value as WorkspaceSettings["autopilot"]["mode"])
+                  }
+                >
                   <SelectTrigger className="mt-1.5">
                     <SelectValue />
                   </SelectTrigger>
@@ -416,7 +611,14 @@ export default function Settings() {
 
               <div>
                 <Label>Digest Frequency</Label>
-                <Select value={digestFrequency} onValueChange={setDigestFrequency}>
+                <Select
+                  value={digestFrequency}
+                  onValueChange={(value) =>
+                    setDigestFrequency(
+                      value as WorkspaceSettings["notifications"]["digestFrequency"]
+                    )
+                  }
+                >
                   <SelectTrigger className="mt-1.5 w-full sm:w-64">
                     <SelectValue />
                   </SelectTrigger>
@@ -431,8 +633,12 @@ export default function Settings() {
           </div>
 
           <div className="flex justify-end">
-            <Button onClick={handleSave} size="lg">
-              Save All Settings
+            <Button
+              onClick={handleSave}
+              size="lg"
+              disabled={isSaving || isLoadingSettings}
+            >
+              {isSaving ? "Saving..." : "Save All Settings"}
             </Button>
           </div>
         </div>

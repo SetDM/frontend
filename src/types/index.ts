@@ -127,3 +127,43 @@ export interface FunnelData {
   callBooked: number;
   sale: number;
 }
+
+export interface WorkspaceProfileSettings {
+  coachName: string;
+  brandName: string;
+  calendarLink: string;
+}
+
+export interface WorkspaceAutopilotSettings {
+  mode: 'off' | 'lead-capture' | 'full';
+  replyWindowStart: string;
+  replyWindowEnd: string;
+  handleStoryReplies: boolean;
+  handleCTAReplies: boolean;
+  handleColdDMs: boolean;
+  handoffInjuries: boolean;
+  handoffAngry: boolean;
+  handoffQualified: boolean;
+}
+
+export interface WorkspaceFiltersSettings {
+  minAge: number;
+  minFollowers: number | null;
+  hidePrivateAccounts: boolean;
+  allowedCountries: string[];
+  allowedLanguages: string[];
+}
+
+export interface WorkspaceNotificationSettings {
+  notifyQualified: boolean;
+  notifyCallBooked: boolean;
+  notifyNeedsReview: boolean;
+  digestFrequency: 'realtime' | 'hourly' | 'daily';
+}
+
+export interface WorkspaceSettings {
+  profile: WorkspaceProfileSettings;
+  autopilot: WorkspaceAutopilotSettings;
+  filters: WorkspaceFiltersSettings;
+  notifications: WorkspaceNotificationSettings;
+}
