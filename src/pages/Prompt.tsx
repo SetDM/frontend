@@ -344,7 +344,7 @@ export default function Prompt() {
             </div>
           </div>
 
-          <div className="sticky bottom-0 p-4 bg-background/80 backdrop-blur-sm border-t border-border">
+          <div className="sticky bottom-0 p-4">
             <div className="max-w-2xl flex justify-end">
               <Button onClick={handleSave} size="lg" disabled={isSaving || isFetchingPrompt}>
                 {isSaving ? "Saving…" : "Save Configuration"}
