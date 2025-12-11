@@ -220,7 +220,7 @@ export default function Prompt() {
         content:
           replyText && replyText.length
             ? replyText
-            : "The AI returned an empty response. Double-check your prompt configuration.",
+            : "AI flagged the conversation as inappropriate or not relevant to the prospect. Refresh the page to keep testing.",
         isUser: false,
         stageTag: activeStage,
       };
@@ -246,9 +246,9 @@ export default function Prompt() {
 
   return (
     <AppLayout>
-      <div className="h-[calc(100vh-2rem)] flex">
+      <div className="h-full flex">
         <div className="flex-1 flex flex-col border-r border-border">
-          <div className="flex-1 p-6 overflow-auto pb-24">
+          <div className="flex-1 p-6 overflow-auto">
             <div className="max-w-2xl">
               <div className="mb-6">
                 <h1 className="text-2xl font-bold text-foreground">Configure Your AI</h1>
@@ -256,6 +256,8 @@ export default function Prompt() {
                   Set up how your AI communicates with prospects in your voice
                 </p>
               </div>
+
+              
 
               <div className="space-y-6">
                 <div className="rounded-lg bg-card p-5 shadow-card">
@@ -341,17 +343,23 @@ export default function Prompt() {
                   </div>
                 )}
               </div>
+
+              <div className="sticky bottom-0 mt-auto">
+                <div className="max-w-2xl flex justify-end">
+                <Button onClick={handleSave} size="lg" disabled={isSaving || isFetchingPrompt}>
+                {isSaving ? "Saving…" : "Save Configuration"}
+                </Button>
+               </div>
+              </div>
+              
+              
             </div>
           </div>
 
-          <div className="sticky bottom-0 p-4">
-            <div className="max-w-2xl flex justify-end">
-              <Button onClick={handleSave} size="lg" disabled={isSaving || isFetchingPrompt}>
-                {isSaving ? "Saving…" : "Save Configuration"}
-              </Button>
-            </div>
-          </div>
+          
         </div>
+
+        
 
         <div className="w-[400px] flex flex-col bg-muted/30">
           <div className="p-4 border-b border-border bg-card">
