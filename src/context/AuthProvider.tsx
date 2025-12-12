@@ -123,9 +123,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         setWorkspaceState((prev) => {
           const nextWorkspaces = { ...prev.workspaces };
-          if (targetId && targetId !== workspaceEntry.instagramId) {
-            delete nextWorkspaces[targetId];
+
+          if (
+            options?.instagramId &&
+            options.instagramId !== workspaceEntry.instagramId &&
+            nextWorkspaces[options.instagramId]
+          ) {
+            delete nextWorkspaces[options.instagramId];
           }
+
           nextWorkspaces[workspaceEntry.instagramId] = workspaceEntry;
 
           const shouldActivate =
