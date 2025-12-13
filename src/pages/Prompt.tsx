@@ -59,7 +59,7 @@ const STAGE_OPTIONS: { value: FunnelStage; label: string }[] = [
 
 export default function Prompt() {
   usePageTitle("Prompt");
-  const { authorizedFetch } = useAuth();
+  const { authorizedFetch, activeWorkspaceId } = useAuth();
 
   const [sections, setSections] = useState<PromptSections>(DEFAULT_SECTIONS);
   const [isFetchingPrompt, setIsFetchingPrompt] = useState(true);
@@ -81,38 +81,77 @@ export default function Prompt() {
       setSections((prev) => ({ ...prev, [key]: value }));
     };
 
-  const hydratePrompt = useCallback(async () => {
-    try {
-      setPromptError(null);
-      setIsFetchingPrompt(true);
-      const response = await authorizedFetch(PROMPT_ENDPOINTS.user);
+  const resetPromptState = useCallback(() => {
+    setSections({ ...DEFAULT_SECTIONS });
+    setTestMessages([...INITIAL_TEST_MESSAGES]);
+    setTestInput("");
+    setPromptError(null);
+    setActiveStage("responded");
+    setIsThinking(false);
+  }, []);
 
-      if (!response.ok) {
-        throw new Error("Failed to load prompt configuration.");
+  const hydratePrompt = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!activeWorkspaceId) {
+        setIsFetchingPrompt(false);
+        return;
       }
 
-      const payload = (await response.json()) as { sections?: Partial<PromptSections> };
-      const nextSections: PromptSections = {
-        coachName: payload.sections?.coachName ?? DEFAULT_COACH_NAME,
-        leadSequence: payload.sections?.leadSequence ?? "",
-        qualificationSequence: payload.sections?.qualificationSequence ?? "",
-        bookingSequence: payload.sections?.bookingSequence ?? ""
-      };
+      try {
+        setPromptError(null);
+        setIsFetchingPrompt(true);
+        const response = await authorizedFetch(PROMPT_ENDPOINTS.user, { signal });
 
-      setSections(nextSections);
-    } catch (error) {
-      console.error(error);
-      setPromptError(
-        error instanceof Error ? error.message : "Failed to load prompt configuration.",
-      );
-    } finally {
-      setIsFetchingPrompt(false);
-    }
-  }, [authorizedFetch]);
+        if (!response.ok) {
+          throw new Error("Failed to load prompt configuration.");
+        }
+
+        const payload = (await response.json()) as { sections?: Partial<PromptSections> };
+        const nextSections: PromptSections = {
+          coachName: payload.sections?.coachName ?? DEFAULT_COACH_NAME,
+          leadSequence: payload.sections?.leadSequence ?? "",
+          qualificationSequence: payload.sections?.qualificationSequence ?? "",
+          bookingSequence: payload.sections?.bookingSequence ?? "",
+        };
+
+        if (signal?.aborted) {
+          return;
+        }
+
+        setSections(nextSections);
+      } catch (error) {
+        if (signal?.aborted) {
+          return;
+        }
+        console.error(error);
+        setPromptError(
+          error instanceof Error ? error.message : "Failed to load prompt configuration.",
+        );
+      } finally {
+        if (!signal?.aborted) {
+          setIsFetchingPrompt(false);
+        }
+      }
+    },
+    [activeWorkspaceId, authorizedFetch],
+  );
 
   useEffect(() => {
-    hydratePrompt();
-  }, [hydratePrompt]);
+    const abortController = new AbortController();
+    setIsFetchingPrompt(true);
+    resetPromptState();
+
+    if (!activeWorkspaceId) {
+      setIsFetchingPrompt(false);
+      return () => abortController.abort();
+    }
+
+    hydratePrompt(abortController.signal);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [activeWorkspaceId, hydratePrompt, resetPromptState]);
 
   const handleSave = async () => {
     setIsSaving(true);

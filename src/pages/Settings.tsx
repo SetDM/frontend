@@ -22,6 +22,38 @@ import { useAuth } from "@/hooks/useAuth";
 import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS } from "@/lib/config";
 import type { WorkspaceSettings } from "@/types";
 
+const DEFAULT_SETTINGS: WorkspaceSettings = {
+  profile: {
+    coachName: "Iris",
+    brandName: "FitWithIris",
+    calendarLink: "",
+  },
+  autopilot: {
+    mode: "full",
+    replyWindowStart: "07:00",
+    replyWindowEnd: "22:00",
+    handleStoryReplies: true,
+    handleCTAReplies: true,
+    handleColdDMs: false,
+    handoffInjuries: true,
+    handoffAngry: true,
+    handoffQualified: true,
+  },
+  filters: {
+    minAge: 18,
+    minFollowers: null,
+    hidePrivateAccounts: false,
+    allowedCountries: ["USA", "UK", "Canada", "Australia"],
+    allowedLanguages: ["English"],
+  },
+  notifications: {
+    notifyQualified: true,
+    notifyCallBooked: true,
+    notifyNeedsReview: true,
+    digestFrequency: "realtime",
+  },
+};
+
 const formatListField = (items?: string[]) => {
   if (!Array.isArray(items) || items.length === 0) {
     return "";
@@ -37,38 +69,64 @@ const parseListField = (input: string) =>
 
 export default function Settings() {
   usePageTitle("Settings");
-  const { user, authorizedFetch, logout, redirectToLogin } = useAuth();
+  const { user, authorizedFetch, logout, redirectToLogin, activeWorkspaceId } = useAuth();
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [coachName, setCoachName] = useState("Iris");
-  const [brandName, setBrandName] = useState("FitWithIris");
-  const [calendarLink, setCalendarLink] = useState("");
+  const [coachName, setCoachName] = useState(DEFAULT_SETTINGS.profile.coachName);
+  const [brandName, setBrandName] = useState(DEFAULT_SETTINGS.profile.brandName);
+  const [calendarLink, setCalendarLink] = useState(DEFAULT_SETTINGS.profile.calendarLink);
   const [isUnlinking, setIsUnlinking] = useState(false);
 
   // Autopilot settings
-  const [autopilotMode, setAutopilotMode] = useState<WorkspaceSettings["autopilot"]["mode"]>("full");
-  const [replyWindowStart, setReplyWindowStart] = useState("07:00");
-  const [replyWindowEnd, setReplyWindowEnd] = useState("22:00");
-  const [handleStoryReplies, setHandleStoryReplies] = useState(true);
-  const [handleCTAReplies, setHandleCTAReplies] = useState(true);
-  const [handleColdDMs, setHandleColdDMs] = useState(false);
-  const [handoffInjuries, setHandoffInjuries] = useState(true);
-  const [handoffAngry, setHandoffAngry] = useState(true);
-  const [handoffQualified, setHandoffQualified] = useState(true);
+  const [autopilotMode, setAutopilotMode] = useState<WorkspaceSettings["autopilot"]["mode"]>(
+    DEFAULT_SETTINGS.autopilot.mode,
+  );
+  const [replyWindowStart, setReplyWindowStart] = useState(
+    DEFAULT_SETTINGS.autopilot.replyWindowStart,
+  );
+  const [replyWindowEnd, setReplyWindowEnd] = useState(DEFAULT_SETTINGS.autopilot.replyWindowEnd);
+  const [handleStoryReplies, setHandleStoryReplies] = useState(
+    DEFAULT_SETTINGS.autopilot.handleStoryReplies,
+  );
+  const [handleCTAReplies, setHandleCTAReplies] = useState(
+    DEFAULT_SETTINGS.autopilot.handleCTAReplies,
+  );
+  const [handleColdDMs, setHandleColdDMs] = useState(DEFAULT_SETTINGS.autopilot.handleColdDMs);
+  const [handoffInjuries, setHandoffInjuries] = useState(
+    DEFAULT_SETTINGS.autopilot.handoffInjuries,
+  );
+  const [handoffAngry, setHandoffAngry] = useState(DEFAULT_SETTINGS.autopilot.handoffAngry);
+  const [handoffQualified, setHandoffQualified] = useState(
+    DEFAULT_SETTINGS.autopilot.handoffQualified,
+  );
 
   // Lead filters
-  const [minAge, setMinAge] = useState("18");
+  const [minAge, setMinAge] = useState(String(DEFAULT_SETTINGS.filters.minAge));
   const [minFollowers, setMinFollowers] = useState("");
-  const [hidePrivateAccounts, setHidePrivateAccounts] = useState(false);
-  const [allowedCountries, setAllowedCountries] = useState("USA, UK, Canada, Australia");
-  const [allowedLanguages, setAllowedLanguages] = useState("English");
+  const [hidePrivateAccounts, setHidePrivateAccounts] = useState(
+    DEFAULT_SETTINGS.filters.hidePrivateAccounts,
+  );
+  const [allowedCountries, setAllowedCountries] = useState(
+    formatListField(DEFAULT_SETTINGS.filters.allowedCountries),
+  );
+  const [allowedLanguages, setAllowedLanguages] = useState(
+    formatListField(DEFAULT_SETTINGS.filters.allowedLanguages),
+  );
 
   // Notifications
-  const [notifyQualified, setNotifyQualified] = useState(true);
-  const [notifyCallBooked, setNotifyCallBooked] = useState(true);
-  const [notifyNeedsReview, setNotifyNeedsReview] = useState(true);
+  const [notifyQualified, setNotifyQualified] = useState(
+    DEFAULT_SETTINGS.notifications.notifyQualified,
+  );
+  const [notifyCallBooked, setNotifyCallBooked] = useState(
+    DEFAULT_SETTINGS.notifications.notifyCallBooked,
+  );
+  const [notifyNeedsReview, setNotifyNeedsReview] = useState(
+    DEFAULT_SETTINGS.notifications.notifyNeedsReview,
+  );
   const [digestFrequency, setDigestFrequency] =
-    useState<WorkspaceSettings["notifications"]["digestFrequency"]>("realtime");
+    useState<WorkspaceSettings["notifications"]["digestFrequency"]>(
+      DEFAULT_SETTINGS.notifications.digestFrequency,
+    );
 
   const applySettingsToState = useCallback((settings: WorkspaceSettings) => {
     if (!settings) {
@@ -105,10 +163,19 @@ export default function Settings() {
     setDigestFrequency(settings.notifications?.digestFrequency ?? "realtime");
   }, []);
 
-  const loadSettings = useCallback(async () => {
+  const resetSettingsState = useCallback(() => {
+    applySettingsToState(DEFAULT_SETTINGS);
+  }, [applySettingsToState]);
+
+  const loadSettings = useCallback(async (signal?: AbortSignal) => {
+    if (!activeWorkspaceId) {
+      setIsLoadingSettings(false);
+      return;
+    }
+
     setIsLoadingSettings(true);
     try {
-      const response = await authorizedFetch(SETTINGS_ENDPOINTS.workspace);
+      const response = await authorizedFetch(SETTINGS_ENDPOINTS.workspace, { signal });
       let payload: unknown = null;
       try {
         payload = await response.json();
@@ -145,11 +212,25 @@ export default function Settings() {
     } finally {
       setIsLoadingSettings(false);
     }
-  }, [applySettingsToState, authorizedFetch]);
+  }, [activeWorkspaceId, applySettingsToState, authorizedFetch]);
 
   useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
+    const abortController = new AbortController();
+    resetSettingsState();
+
+    if (!activeWorkspaceId) {
+      setIsLoadingSettings(false);
+      return () => {
+        abortController.abort();
+      };
+    }
+
+    loadSettings(abortController.signal);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [activeWorkspaceId, loadSettings, resetSettingsState]);
 
   const buildSettingsPayload = (): WorkspaceSettings => {
     const normalizedMinFollowers = minFollowers.trim();

@@ -249,11 +249,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const switchWorkspace = useCallback(
     async (instagramId: string) => {
-      if (!instagramId || instagramId === workspaceStateRef.current.activeWorkspaceId) {
+      const snapshot = workspaceStateRef.current;
+      if (!instagramId || instagramId === snapshot.activeWorkspaceId) {
         return true;
       }
 
-      if (!workspaceStateRef.current.workspaces[instagramId]) {
+      if (!snapshot.workspaces[instagramId]) {
         return false;
       }
 

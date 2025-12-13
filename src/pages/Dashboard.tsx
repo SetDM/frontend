@@ -51,7 +51,7 @@ const formatShareLabel = (value: number, total: number, suffix = "of chats") => 
 };
 
 export default function Dashboard() {
-  const { authorizedFetch, user } = useAuth();
+  const { authorizedFetch, user, activeWorkspaceId } = useAuth();
   const navigate = useNavigate();
   usePageTitle("Dashboard");
   const [stats, setStats] = useState<DashboardStats>(() => createEmptyStats());
@@ -60,12 +60,27 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const abortController = new AbortController();
     let isMounted = true;
+
+    setStats(createEmptyStats());
+    setFunnelData(createEmptyFunnel());
+    setError(null);
+
+    if (!activeWorkspaceId) {
+      setIsLoading(false);
+      return () => {
+        isMounted = false;
+        abortController.abort();
+      };
+    }
 
     const fetchMetrics = async () => {
       setIsLoading(true);
       try {
-        const response = await authorizedFetch(CONVERSATION_ENDPOINTS.metrics);
+        const response = await authorizedFetch(CONVERSATION_ENDPOINTS.metrics, {
+          signal: abortController.signal,
+        });
         if (!response.ok) {
           throw new Error("Unable to load dashboard metrics.");
         }
@@ -85,7 +100,7 @@ export default function Dashboard() {
         setFunnelData(normalizeFunnel(payload?.data?.funnel));
         setError(null);
       } catch (err) {
-        if (!isMounted) {
+        if (!isMounted || abortController.signal.aborted) {
           return;
         }
 
@@ -104,8 +119,9 @@ export default function Dashboard() {
 
     return () => {
       isMounted = false;
+      abortController.abort();
     };
-  }, [authorizedFetch]);
+  }, [activeWorkspaceId, authorizedFetch]);
 
   const autopilotShare = formatShareLabel(stats.autopilotEnabled, stats.ongoingChats);
   const accountName = user?.username?.trim() || user?.instagramId || "there";

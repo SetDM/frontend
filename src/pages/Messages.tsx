@@ -592,7 +592,7 @@ const extractUserProfile = (payload: unknown): InstagramUserProfile | null => {
 };
 
 export default function Messages() {
-  const { authorizedFetch, authToken } = useAuth();
+  const { authorizedFetch, authToken, activeWorkspaceId } = useAuth();
   usePageTitle("Messages");
   const [searchParams] = useSearchParams();
   const stageParam = (searchParams.get("stage") as FunnelStage | "all") || "all";
@@ -896,9 +896,22 @@ export default function Messages() {
     let mounted = true;
 
     setHydratedConversationIds({});
+    setConversationMessageLimits({});
+    setAiNotesByConversationId({});
+    setProfilesById({});
     setConversations([]);
-    setHasMoreConversations(true);
+    setSelectedConversationId(null);
+    setHasMoreConversations(Boolean(activeWorkspaceId));
     setError(null);
+
+    if (!activeWorkspaceId) {
+      setIsLoading(false);
+      return () => {
+        mounted = false;
+        abortController.abort();
+      };
+    }
+
     setIsLoading(true);
 
     const fetchData = async () => {
@@ -945,7 +958,7 @@ export default function Messages() {
       mounted = false;
       abortController.abort();
     };
-  }, [loadConversationPage, mergeFetchedConversations, selectedFilter]);
+  }, [activeWorkspaceId, loadConversationPage, mergeFetchedConversations, selectedFilter]);
 
   const refreshConversations = useCallback(
     async (options?: { silent?: boolean }) => {
