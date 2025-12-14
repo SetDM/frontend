@@ -6,10 +6,13 @@ import { ConversationList } from "@/components/messages/ConversationList";
 import { ChatWindow } from "@/components/messages/ChatWindow";
 import { ProspectPanel } from "@/components/messages/ProspectPanel";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { BACKEND_URL, CONVERSATION_ENDPOINTS, USER_ENDPOINTS } from "@/lib/config";
+import { cn } from "@/lib/utils";
 import type {
   Conversation,
   ConversationRecord,
@@ -594,6 +597,7 @@ const extractUserProfile = (payload: unknown): InstagramUserProfile | null => {
 export default function Messages() {
   const { authorizedFetch, authToken, activeWorkspaceId } = useAuth();
   usePageTitle("Messages");
+  const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
   const stageParam = (searchParams.get("stage") as FunnelStage | "all") || "all";
   const initialStage = stageFilters.includes(stageParam) ? stageParam : "all";
@@ -625,6 +629,8 @@ export default function Messages() {
   );
   const [loadingOlderMessageIds, setLoadingOlderMessageIds] = useState<string[]>([]);
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  const [activePane, setActivePane] = useState<"list" | "chat">("list");
+  const [isProspectSheetOpen, setIsProspectSheetOpen] = useState(false);
   const profilesByIdRef = useRef<Record<string, InstagramUserProfile>>({});
   const hydratedConversationIdsRef = useRef<Record<string, boolean>>({});
   const conversationsRef = useRef<Conversation[]>([]);
@@ -1521,6 +1527,23 @@ export default function Messages() {
     selectedConversation && loadingOlderMessageIds.includes(selectedConversation.id),
   );
 
+  useEffect(() => {
+    if (!isMobile) {
+      setActivePane("chat");
+      return;
+    }
+
+    if (!selectedConversation) {
+      setActivePane("list");
+    }
+  }, [isMobile, selectedConversation]);
+
+  useEffect(() => {
+    if (!isMobile || activePane === "list" || !selectedProspect) {
+      setIsProspectSheetOpen(false);
+    }
+  }, [activePane, isMobile, selectedProspect]);
+
   const handleLoadOlderMessages = useCallback(
     async (conversationId: string) => {
       if (!conversationId) {
@@ -1561,8 +1584,11 @@ export default function Messages() {
     (prospect: Prospect) => {
       ensureConversationMessageLimit(prospect.id);
       setSelectedConversationId(prospect.id);
+      if (isMobile) {
+        setActivePane("chat");
+      }
     },
-    [ensureConversationMessageLimit],
+    [ensureConversationMessageLimit, isMobile],
   );
 
   const handleToggleAutopilot = useCallback(
@@ -2003,6 +2029,8 @@ export default function Messages() {
   }
 
   const hasFilterApplied = selectedFilter !== "all" || Boolean(searchQuery);
+  const showConversationList = !isMobile || activePane === "list";
+  const showChatWindow = !isMobile || activePane === "chat";
 
   if (!isLoading && conversations.length === 0) {
     const handleEmptyStateAction = () => {
@@ -2079,6 +2107,7 @@ export default function Messages() {
             onLoadMore={loadMoreConversations}
             hasMore={hasMoreConversations}
             isLoadingMore={isFetchingMoreConversations}
+            className={cn("md:shrink-0", !showConversationList && "hidden")}
           />
 
           <ChatWindow
@@ -2086,27 +2115,58 @@ export default function Messages() {
             onSendMessage={handleSendMessage}
             onLoadOlderMessages={handleLoadOlderMessages}
             isLoadingOlderMessages={isSelectedConversationLoadingOlderMessages}
+            className={cn(!showChatWindow && "hidden")}
+            onBackToList={isMobile ? () => setActivePane("list") : undefined}
+            onShowDetails={isMobile && selectedProspect ? () => setIsProspectSheetOpen(true) : undefined}
           />
 
-          <ProspectPanel
-            prospect={selectedProspect}
-            profile={selectedProfile}
-            aiNotes={currentAiNotes}
-            queuedMessages={selectedConversation?.queuedMessages ?? []}
-            onSendQueuedMessageNow={handleSendQueuedMessageNow}
-            onCancelQueuedMessage={handleCancelQueuedMessage}
-            onToggleAutopilot={handleToggleAutopilot}
-            onRefreshAiNotes={handleRefreshAiNotes}
-            queueCancelBusyIds={queueCancelBusyIds}
-            queueSendBusyIds={queueSendBusyIds}
-            onClearFlag={handleClearFlag}
-            clearFlagBusyConversationId={clearFlagBusyConversationId}
-            autopilotUpdating={
-              Boolean(selectedProspect && autopilotBusyConversationId === selectedProspect.id)
-            }
-            aiNotesLoading={aiNotesLoading}
-          />
+          {!isMobile ? (
+            <ProspectPanel
+              prospect={selectedProspect}
+              profile={selectedProfile}
+              aiNotes={currentAiNotes}
+              queuedMessages={selectedConversation?.queuedMessages ?? []}
+              onSendQueuedMessageNow={handleSendQueuedMessageNow}
+              onCancelQueuedMessage={handleCancelQueuedMessage}
+              onToggleAutopilot={handleToggleAutopilot}
+              onRefreshAiNotes={handleRefreshAiNotes}
+              queueCancelBusyIds={queueCancelBusyIds}
+              queueSendBusyIds={queueSendBusyIds}
+              onClearFlag={handleClearFlag}
+              clearFlagBusyConversationId={clearFlagBusyConversationId}
+              autopilotUpdating={
+                Boolean(selectedProspect && autopilotBusyConversationId === selectedProspect.id)
+              }
+              aiNotesLoading={aiNotesLoading}
+            />
+          ) : null}
         </div>
+
+        {isMobile ? (
+          <Sheet open={isProspectSheetOpen} onOpenChange={setIsProspectSheetOpen}>
+            <SheetContent side="right" className="w-full max-w-md border-0 p-0">
+              <ProspectPanel
+                prospect={selectedProspect}
+                profile={selectedProfile}
+                aiNotes={currentAiNotes}
+                queuedMessages={selectedConversation?.queuedMessages ?? []}
+                onSendQueuedMessageNow={handleSendQueuedMessageNow}
+                onCancelQueuedMessage={handleCancelQueuedMessage}
+                onToggleAutopilot={handleToggleAutopilot}
+                onRefreshAiNotes={handleRefreshAiNotes}
+                queueCancelBusyIds={queueCancelBusyIds}
+                queueSendBusyIds={queueSendBusyIds}
+                onClearFlag={handleClearFlag}
+                clearFlagBusyConversationId={clearFlagBusyConversationId}
+                autopilotUpdating={
+                  Boolean(selectedProspect && autopilotBusyConversationId === selectedProspect.id)
+                }
+                aiNotesLoading={aiNotesLoading}
+                className="border-0"
+              />
+            </SheetContent>
+          </Sheet>
+        ) : null}
       </div>
     </AppLayout>
   );

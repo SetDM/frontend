@@ -31,7 +31,11 @@ const navItems = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  className?: string;
+}
+
+export function AppSidebar({ className }: AppSidebarProps) {
   const { user, workspaces, activeWorkspaceId, switchWorkspace, redirectToLogin, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -52,7 +56,13 @@ export function AppSidebar() {
   };
 
   return (
-    <aside className="flex h-screen w-56 flex-col border-r border-sidebar-border bg-sidebar">
+    <aside
+      className={cn(
+        "flex h-screen w-56 min-w-[14rem] flex-col border-r border-sidebar-border bg-sidebar",
+        "overflow-y-auto",
+        className,
+      )}
+    >
       {/* Logo */}
       <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
         <img src={logo} alt="SetDM AI" className="h-8 w-8 rounded-lg" />

@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 
 interface ProspectPanelProps {
   prospect: Prospect | null;
@@ -20,6 +21,7 @@ interface ProspectPanelProps {
   queueCancelBusyIds?: string[];
   queueSendBusyIds?: string[];
   clearFlagBusyConversationId?: string | null;
+  className?: string;
 }
 
 const formatCount = (value?: number | null) => {
@@ -44,6 +46,7 @@ export function ProspectPanel({
   queueCancelBusyIds = [],
   queueSendBusyIds = [],
   clearFlagBusyConversationId = null,
+  className,
 }: ProspectPanelProps) {
   const [countdowns, setCountdowns] = useState<Record<string, number>>({});
 
@@ -128,7 +131,13 @@ export function ProspectPanel({
 
   if (!prospect) {
     return (
-      <div className="flex h-full w-80 flex-col overflow-auto border-l border-border bg-card p-4">
+      <div
+        className={cn(
+          "flex h-full w-full flex-col overflow-auto border-t border-border bg-card p-4",
+          "md:w-80 md:border-l md:border-t-0",
+          className,
+        )}
+      >
         <p className="text-center text-muted-foreground">No prospect selected</p>
       </div>
     );
@@ -152,7 +161,13 @@ export function ProspectPanel({
   const isClearingFlag = clearFlagBusyConversationId === prospect.id;
 
   return (
-    <div className="flex h-full w-80 flex-col overflow-auto border-l border-border bg-card">
+    <div
+      className={cn(
+        "flex h-full w-full flex-col overflow-auto border-t border-border bg-card p-4",
+        "md:w-80 md:border-l md:border-t-0",
+        className,
+      )}
+    >
       {/* Profile Card */}
       <div className="border-b border-border p-4">
         <div className="flex flex-col items-center text-center">

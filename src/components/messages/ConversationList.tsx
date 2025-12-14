@@ -18,6 +18,7 @@ interface ConversationListProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  className?: string;
 }
 
 const filterLabels: Record<FunnelStage | 'all', string> = {
@@ -43,6 +44,7 @@ export function ConversationList({
   onLoadMore,
   hasMore = false,
   isLoadingMore = false,
+  className,
 }: ConversationListProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -78,7 +80,13 @@ export function ConversationList({
   }, [hasMore, isLoadingMore, onLoadMore]);
 
   return (
-    <div className="flex h-full min-h-0 w-80 flex-col border-r border-border bg-card">
+    <div
+      className={cn(
+        "flex h-full min-h-0 w-full flex-col border-b border-border bg-card",
+        "md:w-80 md:max-w-sm md:border-b-0 md:border-r",
+        className,
+      )}
+    >
       {/* Search */}
       <div className="border-b border-border p-3">
         <div className="relative">

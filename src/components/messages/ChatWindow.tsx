@@ -3,7 +3,7 @@ import { StageBadge } from "@/components/StageBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, MoreVertical, Plus, Send } from "lucide-react";
+import { ChevronLeft, Loader2, MoreVertical, Plus, Send, UserRound } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,9 @@ interface ChatWindowProps {
   onSendMessage?: (conversationId: string, content: string) => Promise<void> | void;
   onLoadOlderMessages?: (conversationId: string) => Promise<void> | void;
   isLoadingOlderMessages?: boolean;
+  className?: string;
+  onBackToList?: () => void;
+  onShowDetails?: () => void;
 }
 
 export function ChatWindow({
@@ -19,6 +22,9 @@ export function ChatWindow({
   onSendMessage,
   onLoadOlderMessages,
   isLoadingOlderMessages = false,
+  className,
+  onBackToList,
+  onShowDetails,
 }: ChatWindowProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -115,10 +121,20 @@ export function ChatWindow({
   const { prospect, messages } = conversation;
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col bg-background">
+    <div className={cn("flex flex-1 min-h-0 flex-col bg-background", className)}>
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
         <div className="flex items-center gap-3">
+          {onBackToList ? (
+            <button
+              type="button"
+              onClick={onBackToList}
+              className="inline-flex items-center justify-center rounded-full border border-border p-1 text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Back to conversations"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          ) : null}
           <Avatar className="h-9 w-9">
             <AvatarFallback className="bg-gradient-to-br from-primary/20 to-pink/20 text-foreground text-sm font-medium">
               {prospect.name.split(' ').map(n => n[0]).join('')}
@@ -131,9 +147,21 @@ export function ChatWindow({
             </div>
           </div>
         </div>
-        <button className="text-muted-foreground hover:text-foreground">
-          <MoreVertical className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          {onShowDetails ? (
+            <button
+              type="button"
+              onClick={onShowDetails}
+              className="inline-flex items-center justify-center rounded-full border border-border p-1 text-muted-foreground transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+              aria-label="View prospect details"
+            >
+              <UserRound className="h-4 w-4" />
+            </button>
+          ) : null}
+          <button className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+            <MoreVertical className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -173,7 +201,7 @@ export function ChatWindow({
             >
               <div
                 className={cn(
-                  "max-w-[70%] rounded-2xl px-4 py-2.5 border",
+                  "max-w-[85%] rounded-2xl px-4 py-2.5 border sm:max-w-[70%]",
                   msg.isFromProspect
                     ? "bg-card text-card-foreground shadow-sm border-transparent"
                     : cn(
