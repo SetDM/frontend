@@ -13,6 +13,8 @@ import { PROMPT_ENDPOINTS } from "@/lib/config";
 import { StageBadge } from "@/components/StageBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { FunnelStage } from "@/types";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_COACH_NAME = "Iris";
 
@@ -60,6 +62,7 @@ const STAGE_OPTIONS: { value: FunnelStage; label: string }[] = [
 export default function Prompt() {
   usePageTitle("Prompt");
   const { authorizedFetch, activeWorkspaceId } = useAuth();
+  const isMobile = useIsMobile();
 
   const [sections, setSections] = useState<PromptSections>(DEFAULT_SECTIONS);
   const [isFetchingPrompt, setIsFetchingPrompt] = useState(true);
@@ -71,6 +74,7 @@ export default function Prompt() {
   const [isThinking, setIsThinking] = useState(false);
   const [activeStage, setActiveStage] = useState<FunnelStage>("responded");
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const { coachName, leadSequence, qualificationSequence, bookingSequence } = sections;
 
@@ -213,6 +217,14 @@ export default function Prompt() {
     });
   }, [testMessages]);
 
+  useEffect(() => {
+    if (isMobile) {
+      setIsPreviewOpen(false);
+    } else {
+      setIsPreviewOpen(true);
+    }
+  }, [isMobile]);
+
   const handleTestSend = async () => {
     const trimmedInput = testInput.trim();
     if (!trimmedInput || isThinking) {
@@ -285,15 +297,29 @@ export default function Prompt() {
 
   return (
     <AppLayout>
-      <div className="h-[calc(100vh-2rem)] flex">
-        <div className="flex-1 flex flex-col border-r border-border">
-          <div className="flex-1 p-6 overflow-auto pb-24">
+      <div className="flex flex-1 flex-col md:h-[calc(100vh-2rem)] md:flex-row">
+        <div className="flex flex-1 flex-col border-b border-border md:border-b-0 md:border-r">
+          <div className="flex-1 overflow-auto p-4 pb-24 sm:p-6">
             <div className="max-w-2xl">
               <div className="mb-6">
                 <h1 className="text-2xl font-bold text-foreground">Configure Your AI</h1>
                 <p className="text-muted-foreground">
                   Set up how your AI communicates with prospects in your voice
                 </p>
+              </div>
+
+              <div className="mb-6 flex flex-wrap items-center gap-2 md:hidden">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsPreviewOpen((prev) => !prev)}
+                >
+                  {isPreviewOpen ? "Hide Preview" : "Show Preview"}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Preview how the AI responds while you edit.
+                </span>
               </div>
 
               <div className="space-y-6">
@@ -383,8 +409,8 @@ export default function Prompt() {
             </div>
           </div>
 
-          <div className="sticky bottom-0 p-4 bg-background/80 backdrop-blur-sm border-t border-border">
-            <div className="max-w-2xl flex justify-end">
+          <div className="sticky bottom-0 border-t border-border bg-background/90 p-4 backdrop-blur-sm">
+            <div className="flex max-w-2xl justify-end">
               <Button onClick={handleSave} size="lg" disabled={isSaving || isFetchingPrompt}>
                 {isSaving ? "Saving…" : "Save Configuration"}
               </Button>
@@ -392,8 +418,13 @@ export default function Prompt() {
           </div>
         </div>
 
-        <div className="w-[400px] flex flex-col bg-muted/30">
-          <div className="p-4 border-b border-border bg-card">
+        <div
+          className={cn(
+            "flex w-full flex-col bg-muted/30 md:w-[400px] md:flex-shrink-0",
+            isMobile && !isPreviewOpen && "hidden",
+          )}
+        >
+          <div className="border-b border-border bg-card p-4">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-foreground">Preview</h2>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -401,12 +432,12 @@ export default function Prompt() {
                 <span>Test Mode</span>
               </div>
             </div>
-            <div className="mt-4 flex items-center justify-between gap-2">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-xs uppercase tracking-wide text-muted-foreground">
                 Stage context
               </span>
               <Select value={activeStage} onValueChange={(value) => setActiveStage(value as FunnelStage)}>
-                <SelectTrigger className="h-9 w-[170px] text-sm">
+                <SelectTrigger className="h-9 w-full text-sm sm:w-[170px]">
                   <SelectValue placeholder="Select stage" />
                 </SelectTrigger>
                 <SelectContent align="end">
@@ -464,8 +495,8 @@ export default function Prompt() {
             </div>
           </ScrollArea>
 
-          <div className="p-4 border-t border-border bg-card">
-            <div className="flex items-center gap-2">
+          <div className="border-t border-border bg-card p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Button variant="ghost" size="icon" className="shrink-0">
                 <Plus className="h-5 w-5" />
               </Button>
@@ -481,7 +512,12 @@ export default function Prompt() {
                   }
                 }}
               />
-              <Button size="icon" onClick={handleTestSend} disabled={!testInput.trim() || isThinking}>
+              <Button
+                size="icon"
+                onClick={handleTestSend}
+                disabled={!testInput.trim() || isThinking}
+                className="sm:shrink-0"
+              >
                 <Send className="h-4 w-4" />
               </Button>
             </div>
