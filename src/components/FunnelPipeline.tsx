@@ -1,6 +1,7 @@
 import { FunnelData } from "@/types";
 import { MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
 interface FunnelPipelineProps {
   data: FunnelData;
@@ -13,6 +14,16 @@ const stages = [
   { key: 'callBooked' as const, label: 'Call Booked', filter: 'call-booked', showBadge: true },
   { key: 'sale' as const, label: 'Sales', filter: 'sale', showBadge: false },
 ];
+
+type StageKey = typeof stages[number]['key'];
+
+const stageColors: Record<StageKey, string> = {
+  responded: 'from-amber-300 to-amber-500',
+  lead: 'from-rose-300 to-rose-500',
+  qualified: 'from-indigo-300 to-indigo-500',
+  callBooked: 'from-teal-300 to-teal-500',
+  sale: 'from-emerald-300 to-emerald-500',
+};
 
 export function FunnelPipeline({ data }: FunnelPipelineProps) {
   const navigate = useNavigate();
@@ -28,7 +39,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
     return ((current / previous) * 100).toFixed(2) + '%';
   };
 
-  const conversions = {
+  const conversions: Record<StageKey, string> = {
     responded: '100%',
     lead: getConversionPercent(data.lead, data.responded),
     qualified: getConversionPercent(data.qualified, data.lead),
@@ -37,7 +48,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
   };
 
   // Calculate heights for each stage (percentage of max)
-  const heights = {
+  const heights: Record<StageKey, number> = {
     responded: 100,
     lead: Math.max(25, (data.lead / maxValue) * 100),
     qualified: Math.max(18, (data.qualified / maxValue) * 100),
@@ -140,7 +151,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
   return (
     <div className="rounded-xl bg-card p-6 shadow-card">
       {/* Stage labels, counts, and action buttons */}
-      <div className="grid grid-cols-5 gap-2 mb-6">
+      <div className="mb-6 hidden grid-cols-5 gap-2 md:grid">
         {stages.map((stage) => {
           const value = data[stage.key];
           return (
@@ -169,8 +180,48 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
         })}
       </div>
 
+      {/* Mobile vertical funnel */}
+      <div className="mb-6 md:hidden">
+        <div className="flex gap-4">
+          <div className="flex h-80 w-12 flex-col overflow-hidden rounded-full bg-muted/60 shadow-inner">
+            {stages.map((stage) => (
+              <button
+                key={stage.key}
+                type="button"
+                onClick={() => handleStageClick(stage.filter)}
+                style={{ flex: `${heights[stage.key]} 0 auto` }}
+                className={cn(
+                  "flex items-center justify-center bg-gradient-to-b text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                  stageColors[stage.key],
+                )}
+              >
+                <span className="sr-only">{`${stage.label}: ${data[stage.key]} conversations`}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex h-80 flex-1 flex-col">
+            {stages.map((stage) => (
+              <button
+                key={stage.key}
+                type="button"
+                onClick={() => handleStageClick(stage.filter)}
+                style={{ flex: `${heights[stage.key]} 0 auto` }}
+                className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 text-left transition-colors hover:border-border hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-foreground">{stage.label}</span>
+                  <span className="text-xs text-muted-foreground">{conversions[stage.key]} conversion</span>
+                </div>
+                <span className="text-xl font-bold text-foreground">{data[stage.key]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Funnel visualization */}
-      <div className="relative">
+      <div className="relative hidden md:block">
         <svg 
           viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
           className="w-full h-auto" 
