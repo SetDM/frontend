@@ -242,7 +242,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
     []);
 
   const redirectToLogin = useCallback(() => {
-    window.location.href = AUTH_ENDPOINTS.login;
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const loginUrl = AUTH_ENDPOINTS.login;
+    const userAgent = window.navigator?.userAgent || window.navigator?.vendor || "";
+    const isInstagramBrowser = /Instagram/i.test(userAgent);
+    const isFacebookBrowser = /(FBAN|FBAV|FB_IAB|Messenger)/i.test(userAgent);
+    const isOtherInAppBrowser = /(Line|Twitter|WhatsApp|Snapchat)/i.test(userAgent);
+    const isStandalonePwa = (() => {
+      const standaloneMedia = window.matchMedia?.("(display-mode: standalone)");
+      const isIosStandalone = (window.navigator as typeof window.navigator & { standalone?: boolean })?.standalone;
+      return Boolean(standaloneMedia?.matches || isIosStandalone);
+    })();
+
+    const shouldForceExternal =
+      isInstagramBrowser || isFacebookBrowser || isOtherInAppBrowser || isStandalonePwa;
+
+    if (shouldForceExternal) {
+      const newWindow = window.open(loginUrl, "_blank", "noopener,noreferrer");
+      if (newWindow) {
+        newWindow.opener = null;
+        return;
+      }
+    }
+
+    window.location.href = loginUrl;
   }, []);
 
   const clearError = useCallback(() => setError(null), []);

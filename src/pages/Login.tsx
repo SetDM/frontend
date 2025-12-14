@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,54 @@ export default function Login() {
   const { redirectToLogin, user, isLoading, error, clearError } = useAuth();
   const navigate = useNavigate();
   usePageTitle("Login");
+  const [inAppBrowser, setInAppBrowser] = useState<{ isInApp: boolean; label: string }>({
+    isInApp: false,
+    label: "",
+  });
 
   useEffect(() => {
     if (!isLoading && user) {
       navigate("/", { replace: true });
     }
   }, [isLoading, user, navigate]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const detectInAppBrowser = () => {
+      const ua = window.navigator.userAgent || window.navigator.vendor || "";
+      const isInstagram = /Instagram/i.test(ua);
+      const isFacebookFamily = /(FBAN|FBAV|FB_IAB|Messenger)/i.test(ua);
+      const isTikTok = /TikTok/i.test(ua);
+      const isTwitter = /Twitter/i.test(ua);
+      const isInApp = isInstagram || isFacebookFamily || isTikTok || isTwitter;
+      const label = isInstagram
+        ? "Instagram"
+        : isFacebookFamily
+          ? "Facebook/Messenger"
+          : isTikTok
+            ? "TikTok"
+            : isTwitter
+              ? "Twitter"
+              : "embedded";
+      return { isInApp, label };
+    };
+
+    setInAppBrowser(detectInAppBrowser());
+  }, []);
+
+  const handleOpenInBrowser = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const newWindow = window.open(window.location.href, "_blank", "noopener,noreferrer");
+    if (newWindow) {
+      newWindow.opener = null;
+    }
+  };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
@@ -41,10 +83,28 @@ export default function Login() {
           </div>
         )}
 
-        <Button onClick={redirectToLogin} className="w-full gap-2" size="lg">
+        {inAppBrowser.isInApp && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p>
+              Instagram login cannot complete inside the {inAppBrowser.label} in-app browser. Tap the menu and choose
+              “Open in Safari/Chrome”, then try again.
+            </p>
+            <Button variant="outline" size="sm" className="mt-3 w-full" onClick={handleOpenInBrowser}>
+              Open this page in your browser
+            </Button>
+          </div>
+        )}
+
+        <Button onClick={redirectToLogin} className="w-full gap-2" size="lg" disabled={inAppBrowser.isInApp}>
           <Instagram className="h-4 w-4" />
           Continue with Instagram
         </Button>
+
+        {inAppBrowser.isInApp && (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Open this page in your mobile browser to enable Instagram authentication.
+          </p>
+        )}
       </div>
     </div>
   );
