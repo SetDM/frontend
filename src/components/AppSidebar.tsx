@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  MessageCircle, 
-  FileText, 
-  Settings, 
+import {
+  LayoutDashboard,
+  MessageCircle,
+  FileText,
+  Settings,
   LogOut,
   ChevronDown,
-  Plus
+  Plus,
+  Database
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,6 +30,7 @@ const navItems = [
   { title: "Messages", url: "/messages", icon: MessageCircle },
   { title: "Prompt", url: "/prompt", icon: FileText },
   { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Followers Admin", url: "/admin/followers", icon: Database },
 ];
 
 interface AppSidebarProps {

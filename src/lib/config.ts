@@ -35,3 +35,8 @@ export const PROMPT_ENDPOINTS = {
 export const SETTINGS_ENDPOINTS = {
   workspace: `${API_BASE_URL}/settings`,
 };
+
+export const FOLLOWER_ADMIN_ENDPOINTS = {
+  importCsv: `${API_BASE_URL}/admin/followers/import`,
+  enrich: (instagramId: string) => `${API_BASE_URL}/admin/followers/${instagramId}/enrich`,
+};

@@ -13,6 +13,7 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import AuthSuccess from "./pages/AuthSuccess";
 import AuthError from "./pages/AuthError";
+import AdminFollowers from "./pages/AdminFollowers";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const App = () => (
               <Route path="/messages" element={<Messages />} />
               <Route path="/prompt" element={<Prompt />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/admin/followers" element={<AdminFollowers />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
