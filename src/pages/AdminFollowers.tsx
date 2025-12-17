@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FOLLOWER_ADMIN_ENDPOINTS } from "@/lib/config";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 const ADMIN_TOKEN_STORAGE_KEY = "setdm-admin-token";
 const FILENAME_PATTERN = /followers_(\d+)/i;
@@ -28,6 +29,7 @@ const formatResult = (result?: Record<string, unknown> | null) => {
 const AdminFollowers = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
+  const { authToken } = useAuth();
   const [adminToken, setAdminToken] = useState("");
   const [ownerInstagramId, setOwnerInstagramId] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -85,10 +87,22 @@ const AdminFollowers = () => {
     return true;
   };
 
+  const ensureAuthSession = () => {
+    if (!authToken) {
+      toast({
+        title: "Sign in required",
+        description: "Open the main dashboard and log in before using admin tools.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    return true;
+  };
+
   const handleUpload = async (event?: FormEvent) => {
     event?.preventDefault();
 
-    if (!ensureAdminToken()) return;
+    if (!ensureAdminToken() || !ensureAuthSession()) return;
     if (!selectedFile) {
       toast({ title: "Select a CSV file", variant: "destructive" });
       return;
@@ -111,6 +125,7 @@ const AdminFollowers = () => {
         body: formData,
         headers: {
           "x-admin-token": adminToken.trim(),
+          Authorization: `Bearer ${authToken}`,
         },
         credentials: "include",
       });
@@ -135,7 +150,7 @@ const AdminFollowers = () => {
   };
 
   const handleEnrich = async () => {
-    if (!ensureAdminToken()) return;
+    if (!ensureAdminToken() || !ensureAuthSession()) return;
     if (!ownerInstagramId.trim()) {
       toast({ title: "Owner Instagram ID missing", variant: "destructive" });
       return;
@@ -150,6 +165,7 @@ const AdminFollowers = () => {
         headers: {
           "Content-Type": "application/json",
           "x-admin-token": adminToken.trim(),
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({ limit, force: false }),
         credentials: "include",
