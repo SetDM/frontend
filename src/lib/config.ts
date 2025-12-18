@@ -40,7 +40,7 @@ export const FOLLOWER_ADMIN_ENDPOINTS = {
 };
 
 // Netlify function for sending emails (Gmail via nodemailer)
-export const EMAIL_FUNCTION_URL = "/api/send-email";
+export const EMAIL_FUNCTION_URL = "/.netlify/functions/send-email";
 
 export const TEAM_ENDPOINTS = {
     // Invites
