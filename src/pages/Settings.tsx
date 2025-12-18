@@ -448,6 +448,37 @@ export default function Settings() {
             .map((s) => s.trim())
             .filter(Boolean);
 
+    // Helper to convert array to comma-separated string and back
+    const arrayToCommaText = (arr: string[]) => arr.join(", ");
+    const commaTextToArray = (text: string) =>
+        text
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+    // Local state for text inputs (to allow typing without immediate processing)
+    const [blockedCountriesText, setBlockedCountriesText] = useState("");
+    const [allowedLanguagesText, setAllowedLanguagesText] = useState("");
+    const [triggerExamplesText, setTriggerExamplesText] = useState("");
+    const [ignorePatternsText, setIgnorePatternsText] = useState("");
+
+    // Sync local text state when settings load
+    useEffect(() => {
+        setBlockedCountriesText(arrayToCommaText(settings.filters.blockedCountries));
+    }, [settings.filters.blockedCountries]);
+
+    useEffect(() => {
+        setAllowedLanguagesText(arrayToCommaText(settings.filters.allowedLanguages));
+    }, [settings.filters.allowedLanguages]);
+
+    useEffect(() => {
+        setTriggerExamplesText(arrayToText(settings.entryPoints.triggerExamples));
+    }, [settings.entryPoints.triggerExamples]);
+
+    useEffect(() => {
+        setIgnorePatternsText(arrayToText(settings.ignoreRules.ignorePatterns));
+    }, [settings.ignoreRules.ignorePatterns]);
+
     return (
         <AppLayout>
             <div className="p-4 sm:p-8 max-w-4xl">
@@ -680,8 +711,9 @@ export default function Settings() {
                                 <Label htmlFor="trigger-examples">Other Trigger Messages</Label>
                                 <Textarea
                                     id="trigger-examples"
-                                    value={arrayToText(settings.entryPoints.triggerExamples)}
-                                    onChange={(e) => updateEntryPoints({ triggerExamples: textToArray(e.target.value) })}
+                                    value={triggerExamplesText}
+                                    onChange={(e) => setTriggerExamplesText(e.target.value)}
+                                    onBlur={(e) => updateEntryPoints({ triggerExamples: textToArray(e.target.value) })}
                                     placeholder="im fat&#10;how can i get like you&#10;i need help losing weight"
                                     className="mt-1.5 min-h-[100px]"
                                     disabled={isLoadingSettings}
@@ -707,8 +739,9 @@ export default function Settings() {
                             <Label htmlFor="ignore-patterns">Ignore Patterns</Label>
                             <Textarea
                                 id="ignore-patterns"
-                                value={arrayToText(settings.ignoreRules.ignorePatterns)}
-                                onChange={(e) => updateIgnoreRules({ ignorePatterns: textToArray(e.target.value) })}
+                                value={ignorePatternsText}
+                                onChange={(e) => setIgnorePatternsText(e.target.value)}
+                                onBlur={(e) => updateIgnoreRules({ ignorePatterns: textToArray(e.target.value) })}
                                 placeholder="do you have info products&#10;coaching program info&#10;I can help you grow"
                                 className="mt-1.5 min-h-[100px]"
                                 disabled={isLoadingSettings}
@@ -734,15 +767,9 @@ export default function Settings() {
                                 <Label htmlFor="blocked-countries">Blocked Countries</Label>
                                 <Input
                                     id="blocked-countries"
-                                    value={settings.filters.blockedCountries.join(", ")}
-                                    onChange={(e) =>
-                                        updateFilters({
-                                            blockedCountries: e.target.value
-                                                .split(",")
-                                                .map((s) => s.trim())
-                                                .filter(Boolean),
-                                        })
-                                    }
+                                    value={blockedCountriesText}
+                                    onChange={(e) => setBlockedCountriesText(e.target.value)}
+                                    onBlur={(e) => updateFilters({ blockedCountries: commaTextToArray(e.target.value) })}
                                     placeholder="India, Nigeria, Philippines"
                                     className="mt-1.5"
                                     disabled={isLoadingSettings}
@@ -753,15 +780,9 @@ export default function Settings() {
                                 <Label htmlFor="allowed-languages">Languages</Label>
                                 <Input
                                     id="allowed-languages"
-                                    value={settings.filters.allowedLanguages.join(", ")}
-                                    onChange={(e) =>
-                                        updateFilters({
-                                            allowedLanguages: e.target.value
-                                                .split(",")
-                                                .map((s) => s.trim())
-                                                .filter(Boolean),
-                                        })
-                                    }
+                                    value={allowedLanguagesText}
+                                    onChange={(e) => setAllowedLanguagesText(e.target.value)}
+                                    onBlur={(e) => updateFilters({ allowedLanguages: commaTextToArray(e.target.value) })}
                                     placeholder="English, Spanish"
                                     className="mt-1.5"
                                     disabled={isLoadingSettings}
