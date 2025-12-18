@@ -10,7 +10,8 @@ type AuthApiResponse = AuthUser | { user: AuthUser | null } | null;
 const extractUser = (payload: AuthApiResponse): AuthUser | null => {
     if (!payload) return null;
 
-    const container = (payload as { user?: AuthUser | null }).user ?? payload;
+    // Check for user object in payload.user, payload.data, or directly in payload
+    const container = (payload as { user?: AuthUser | null }).user ?? (payload as { data?: AuthUser | null }).data ?? payload;
     if (!container) return null;
 
     const tokenCandidate =
