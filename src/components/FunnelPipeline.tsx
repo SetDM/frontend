@@ -27,13 +27,12 @@ const stageColors: Record<StageKey, string> = {
 
 export function FunnelPipeline({ data }: FunnelPipelineProps) {
   const navigate = useNavigate();
-  const maxValue = Math.max(data.responded, 1);
 
   const handleStageClick = (filter: string) => {
     navigate(`/messages?stage=${filter}`);
   };
 
-  // Calculate stage-to-stage conversion percentages (for bottleneck analysis)
+  // Calculate stage-to-stage conversion percentages
   const getConversionPercent = (current: number, previous: number) => {
     if (previous === 0) return '0%';
     return ((current / previous) * 100).toFixed(0) + '%';
@@ -47,126 +46,68 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
     sale: getConversionPercent(data.sale, data.callBooked),
   };
 
-  // Calculate heights for each stage (percentage of max) - ensure minimum visibility
+  // Calculate heights based on actual funnel progression (cumulative conversion)
+  const maxValue = Math.max(data.responded, 1);
   const heights: Record<StageKey, number> = {
     responded: 100,
-    lead: Math.max(70, (data.lead / maxValue) * 100),
-    qualified: Math.max(50, (data.qualified / maxValue) * 100),
-    callBooked: Math.max(35, (data.callBooked / maxValue) * 100),
-    sale: Math.max(20, (data.sale / maxValue) * 100),
+    lead: Math.max(60, (data.lead / maxValue) * 100),
+    qualified: Math.max(40, (data.qualified / maxValue) * 100),
+    callBooked: Math.max(25, (data.callBooked / maxValue) * 100),
+    sale: Math.max(10, (data.sale / maxValue) * 100),
   };
 
   const svgWidth = 1000;
-  const svgHeight = 140;
-  const maxFunnelHeight = 100;
+  const svgHeight = 120;
+  const maxFunnelHeight = 90;
   const centerY = svgHeight / 2;
+  const endTipHeight = 6; // Narrow tip at the end
 
-  // Build smooth funnel path with proper tapering
+  // Build smooth funnel path - proper taper from left to right
   const buildFunnelPath = () => {
-    const stageHeights = [
-      (heights.responded / 100) * maxFunnelHeight,
-      (heights.lead / 100) * maxFunnelHeight,
-      (heights.qualified / 100) * maxFunnelHeight,
-      (heights.callBooked / 100) * maxFunnelHeight,
-      (heights.sale / 100) * maxFunnelHeight,
-    ];
-
-    // X positions for each stage boundary
-    const stageWidth = svgWidth / 5;
-    const xPositions = [0, stageWidth, stageWidth * 2, stageWidth * 3, stageWidth * 4, svgWidth];
-
-    // Build top edge with smooth cubic bezier curves
-    let path = `M 0 ${centerY - stageHeights[0] / 2}`;
+    const startHeight = (heights.responded / 100) * maxFunnelHeight;
     
-    for (let i = 0; i < 5; i++) {
-      const x1 = xPositions[i];
-      const x2 = xPositions[i + 1];
-      const h1 = stageHeights[i];
-      const h2 = stageHeights[Math.min(i + 1, 4)];
-      
-      const y1 = centerY - h1 / 2;
-      const y2 = centerY - h2 / 2;
-      
-      // Control points for smooth curve
-      const cpx1 = x1 + (x2 - x1) * 0.7;
-      const cpx2 = x1 + (x2 - x1) * 0.85;
-      
-      path += ` C ${cpx1} ${y1}, ${cpx2} ${y2}, ${x2} ${y2}`;
-    }
-
-    // Build bottom edge (right to left) with smooth curves
-    for (let i = 4; i >= 0; i--) {
-      const x1 = xPositions[i + 1];
-      const x2 = xPositions[i];
-      const h1 = stageHeights[Math.min(i + 1, 4)];
-      const h2 = stageHeights[i];
-      
-      const y1 = centerY + h1 / 2;
-      const y2 = centerY + h2 / 2;
-      
-      const cpx1 = x1 - (x1 - x2) * 0.15;
-      const cpx2 = x1 - (x1 - x2) * 0.3;
-      
-      path += ` C ${cpx1} ${y1}, ${cpx2} ${y2}, ${x2} ${y2}`;
-    }
-
-    path += ' Z';
+    // Create control points for a smooth bezier curve taper
+    // The funnel smoothly narrows from full height to a thin tip
+    const path = `
+      M 0 ${centerY - startHeight / 2}
+      C ${svgWidth * 0.3} ${centerY - startHeight / 2},
+        ${svgWidth * 0.5} ${centerY - startHeight * 0.3},
+        ${svgWidth * 0.75} ${centerY - endTipHeight}
+      L ${svgWidth} ${centerY}
+      L ${svgWidth * 0.75} ${centerY + endTipHeight}
+      C ${svgWidth * 0.5} ${centerY + startHeight * 0.3},
+        ${svgWidth * 0.3} ${centerY + startHeight / 2},
+        0 ${centerY + startHeight / 2}
+      Z
+    `;
     return path;
   };
 
-  // Build highlight path for 3D effect
+  // Build highlight path for 3D effect (top portion)
   const buildHighlightPath = () => {
-    const stageHeights = [
-      (heights.responded / 100) * maxFunnelHeight,
-      (heights.lead / 100) * maxFunnelHeight,
-      (heights.qualified / 100) * maxFunnelHeight,
-      (heights.callBooked / 100) * maxFunnelHeight,
-      (heights.sale / 100) * maxFunnelHeight,
-    ];
-
-    const stageWidth = svgWidth / 5;
-    const xPositions = [0, stageWidth, stageWidth * 2, stageWidth * 3, stageWidth * 4, svgWidth];
-    const highlightRatio = 0.3;
-
-    // Top edge
-    let path = `M 0 ${centerY - stageHeights[0] / 2}`;
+    const startHeight = (heights.responded / 100) * maxFunnelHeight;
+    const highlightOffset = startHeight * 0.25;
     
-    for (let i = 0; i < 5; i++) {
-      const x1 = xPositions[i];
-      const x2 = xPositions[i + 1];
-      const h1 = stageHeights[i];
-      const h2 = stageHeights[Math.min(i + 1, 4)];
-      
-      const y1 = centerY - h1 / 2;
-      const y2 = centerY - h2 / 2;
-      
-      const cpx1 = x1 + (x2 - x1) * 0.7;
-      const cpx2 = x1 + (x2 - x1) * 0.85;
-      
-      path += ` C ${cpx1} ${y1}, ${cpx2} ${y2}, ${x2} ${y2}`;
-    }
-
-    // Bottom of highlight (partial height)
-    for (let i = 4; i >= 0; i--) {
-      const x1 = xPositions[i + 1];
-      const x2 = xPositions[i];
-      const h1 = stageHeights[Math.min(i + 1, 4)];
-      const h2 = stageHeights[i];
-      
-      const y1 = centerY - h1 / 2 + h1 * highlightRatio;
-      const y2 = centerY - h2 / 2 + h2 * highlightRatio;
-      
-      const cpx1 = x1 - (x1 - x2) * 0.15;
-      const cpx2 = x1 - (x1 - x2) * 0.3;
-      
-      path += ` C ${cpx1} ${y1}, ${cpx2} ${y2}, ${x2} ${y2}`;
-    }
-
-    path += ' Z';
+    const path = `
+      M 0 ${centerY - startHeight / 2}
+      C ${svgWidth * 0.3} ${centerY - startHeight / 2},
+        ${svgWidth * 0.5} ${centerY - startHeight * 0.3},
+        ${svgWidth * 0.75} ${centerY - endTipHeight}
+      L ${svgWidth * 0.75} ${centerY - endTipHeight + 2}
+      C ${svgWidth * 0.5} ${centerY - startHeight * 0.3 + highlightOffset * 0.3},
+        ${svgWidth * 0.3} ${centerY - startHeight / 2 + highlightOffset},
+        0 ${centerY - startHeight / 2 + highlightOffset}
+      Z
+    `;
     return path;
   };
 
   const sectionWidth = svgWidth / 5;
+
+  // Calculate Y position for each pill based on funnel shape
+  const getPillY = (index: number) => {
+    return centerY; // Keep pills centered
+  };
 
   return (
     <div className="rounded-xl bg-card p-6 shadow-card">
@@ -256,13 +197,13 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
             
             {/* Highlight gradient for 3D effect */}
             <linearGradient id="highlightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="rgba(255, 255, 255, 0.4)" />
+              <stop offset="0%" stopColor="rgba(255, 255, 255, 0.35)" />
               <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
             </linearGradient>
 
             {/* Subtle shadow */}
             <filter id="funnelShadow" x="-5%" y="-20%" width="110%" height="150%">
-              <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="rgba(0,0,0,0.15)" />
+              <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="rgba(0,0,0,0.12)" />
             </filter>
           </defs>
           
@@ -282,24 +223,25 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
           {/* Percentage pills */}
           {stages.map((stage, index) => {
             const xPos = sectionWidth * index + sectionWidth / 2;
+            const yPos = getPillY(index);
             const percent = conversions[stage.key];
-            const pillWidth = percent.length > 4 ? 56 : 48;
+            const pillWidth = percent.length > 4 ? 58 : 50;
             return (
               <g key={stage.key}>
                 <rect
                   x={xPos - pillWidth / 2}
-                  y={centerY - 12}
+                  y={yPos - 14}
                   width={pillWidth}
-                  height={24}
-                  rx={12}
+                  height={28}
+                  rx={14}
                   fill="hsla(220, 15%, 25%, 0.85)"
                 />
                 <text
                   x={xPos}
-                  y={centerY + 4}
+                  y={yPos + 5}
                   textAnchor="middle"
                   fill="white"
-                  fontSize="12"
+                  fontSize="13"
                   fontWeight="600"
                   fontFamily="system-ui, -apple-system, sans-serif"
                 >
