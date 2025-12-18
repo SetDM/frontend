@@ -158,18 +158,18 @@ function SequenceSection({ title, description, isOpen, onToggle, script, onScrip
             followups.map((f) => {
                 if (f.id !== id) return f;
 
-                let updatedFollowup = { ...f, [field]: value };
+                const baseFollowup = { ...f, [field]: value };
 
                 // Enforce 24-hour max limit
-                const delayValue = parseInt(field === "delayValue" ? value : updatedFollowup.delayValue) || 1;
-                const delayUnit = field === "delayUnit" ? value : updatedFollowup.delayUnit;
+                const delayValue = parseInt(field === "delayValue" ? value : baseFollowup.delayValue) || 1;
+                const delayUnit = field === "delayUnit" ? value : baseFollowup.delayUnit;
                 const totalHours = delayUnit === "hours" ? delayValue : delayValue / 60;
 
                 if (totalHours > MAX_DELAY_HOURS) {
-                    updatedFollowup.delayValue = delayUnit === "hours" ? "24" : "1440";
+                    return { ...baseFollowup, delayValue: delayUnit === "hours" ? "24" : "1440" };
                 }
 
-                return updatedFollowup;
+                return baseFollowup;
             })
         );
     };
@@ -376,17 +376,16 @@ function KeywordSequenceSection({ isOpen, onToggle, keyword, onKeywordChange, in
             followups.map((f) => {
                 if (f.id !== id) return f;
 
-                let updatedFollowup = { ...f, [field]: value };
-
-                const delayValue = parseInt(field === "delayValue" ? value : updatedFollowup.delayValue) || 1;
-                const delayUnit = field === "delayUnit" ? value : updatedFollowup.delayUnit;
+                const baseFollowup = { ...f, [field]: value };
+                const delayValue = parseInt(field === "delayValue" ? value : baseFollowup.delayValue) || 1;
+                const delayUnit = field === "delayUnit" ? value : baseFollowup.delayUnit;
                 const totalHours = delayUnit === "hours" ? delayValue : delayValue / 60;
 
                 if (totalHours > MAX_DELAY_HOURS) {
-                    updatedFollowup.delayValue = delayUnit === "hours" ? "24" : "1440";
+                    return { ...baseFollowup, delayValue: delayUnit === "hours" ? "24" : "1440" };
                 }
 
-                return updatedFollowup;
+                return baseFollowup;
             })
         );
     };
@@ -653,9 +652,20 @@ export default function Prompt() {
                 if (payload.config) {
                     setConfig((prev) => ({
                         ...prev,
-                        ...payload.config,
-                        objectionHandlers: payload.config?.objectionHandlers?.length ? payload.config.objectionHandlers : [{ id: crypto.randomUUID(), objection: "", response: "" }],
-                        sequences: payload.config?.sequences || DEFAULT_SEQUENCES,
+                        coachName: payload.config?.coachName || prev.coachName,
+                        addToExisting: payload.config?.addToExisting ?? prev.addToExisting,
+                        coachingDetails: payload.config?.coachingDetails || prev.coachingDetails,
+                        styleNotes: payload.config?.styleNotes || prev.styleNotes,
+                        objectionHandlers: payload.config?.objectionHandlers?.length 
+                            ? payload.config.objectionHandlers 
+                            : [{ id: crypto.randomUUID(), objection: "", response: "" }],
+                        sequences: {
+                            lead: payload.config?.sequences?.lead || DEFAULT_SEQUENCES.lead,
+                            qualification: payload.config?.sequences?.qualification || DEFAULT_SEQUENCES.qualification,
+                            booking: payload.config?.sequences?.booking || DEFAULT_SEQUENCES.booking,
+                            callBooked: payload.config?.sequences?.callBooked || DEFAULT_SEQUENCES.callBooked,
+                            vslLink: payload.config?.sequences?.vslLink || DEFAULT_SEQUENCES.vslLink,
+                        },
                         keywordSequence: payload.config?.keywordSequence || DEFAULT_KEYWORD_SEQUENCE,
                     }));
                 }
