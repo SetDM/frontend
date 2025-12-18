@@ -1,6 +1,6 @@
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { useNavigate, useBlocker } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -488,9 +488,6 @@ export default function Settings() {
     useEffect(() => {
         setIgnorePatternsText(arrayToText(settings.ignoreRules.ignorePatterns));
     }, [settings.ignoreRules.ignorePatterns]);
-
-    // Block navigation when there are unsaved changes
-    const blocker = useBlocker(hasUnsavedChanges);
 
     // Handle browser refresh/close with unsaved changes
     useEffect(() => {
@@ -1067,30 +1064,6 @@ export default function Settings() {
                     </AlertDialogContent>
                 </AlertDialog>
 
-                {/* Unsaved Changes Dialog */}
-                <AlertDialog open={blocker.state === "blocked"}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-                            <AlertDialogDescription>You have unsaved changes. Do you want to save before leaving?</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => blocker.reset?.()}>Cancel</AlertDialogCancel>
-                            <Button variant="outline" onClick={() => blocker.proceed?.()}>
-                                Discard Changes
-                            </Button>
-                            <AlertDialogAction
-                                onClick={async () => {
-                                    await handleSave();
-                                    blocker.proceed?.();
-                                }}
-                                disabled={isSaving}
-                            >
-                                {isSaving ? "Saving..." : "Save & Leave"}
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
             </div>
         </AppLayout>
     );
