@@ -27,7 +27,7 @@ export function AppLayout({ children, hideMobileHeader = false }: AppLayoutProps
                 <AppSidebar />
             </div>
 
-            <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
                 {!hideMobileHeader && (
                     <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 md:hidden">
                         <Button type="button" size="icon" variant="outline" onClick={() => setIsSidebarOpen(true)} aria-label="Open navigation">
@@ -39,7 +39,7 @@ export function AppLayout({ children, hideMobileHeader = false }: AppLayoutProps
                         </div>
                     </header>
                 )}
-                <main className="flex-1 overflow-auto">{children}</main>
+                <main className="flex-1 min-h-0 overflow-auto">{children}</main>
             </div>
 
             {isMobile ? (
