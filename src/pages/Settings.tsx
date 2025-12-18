@@ -10,15 +10,23 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Instagram, User, Bot, Bell, Link2, Clock, AlertTriangle, MessageSquare, Ban, Target, Timer, Save, Users, Copy, Check, UserPlus } from "lucide-react";
+import { Instagram, User, Bot, Link2, Clock, AlertTriangle, MessageSquare, Ban, Target, Timer, Save, Users, Copy, Check, UserPlus, Trash2, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
-import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS } from "@/lib/config";
+import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS, TEAM_ENDPOINTS } from "@/lib/config";
 import type { WorkspaceSettings, TeamMember } from "@/types";
 
 type TeamRole = "admin" | "editor" | "viewer";
+
+interface PendingInvite {
+    id: string;
+    email: string;
+    role: TeamRole;
+    expiresAt: string;
+    createdAt: string;
+}
 
 const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
     admin: "Admins can manage all settings, team members, and have full access to all features except ownership transfer.",
@@ -87,11 +95,24 @@ export default function Settings() {
     // Autopilot confirmation dialog
     const [showAutopilotConfirm, setShowAutopilotConfirm] = useState(false);
 
+    // Team state
+    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+    const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+    const [isLoadingTeam, setIsLoadingTeam] = useState(false);
+
     // Team invite dialog
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-    const [selectedRole, setSelectedRole] = useState<TeamRole>("admin");
+    const [inviteEmail, setInviteEmail] = useState("");
+    const [selectedRole, setSelectedRole] = useState<TeamRole>("editor");
     const [inviteLink, setInviteLink] = useState<string | null>(null);
+    const [inviteEmailSent, setInviteEmailSent] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+
+    // Delete confirmation
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Helper to update nested settings
     const updateProfile = (updates: Partial<WorkspaceSettings["profile"]>) => {
@@ -114,10 +135,6 @@ export default function Settings() {
         setSettings((prev) => ({ ...prev, filters: { ...prev.filters, ...updates } }));
     };
 
-    const updateNotifications = (updates: Partial<WorkspaceSettings["notifications"]>) => {
-        setSettings((prev) => ({ ...prev, notifications: { ...prev.notifications, ...updates } }));
-    };
-
     const handleAutopilotToggle = (checked: boolean) => {
         if (checked) {
             setShowAutopilotConfirm(true);
@@ -131,10 +148,69 @@ export default function Settings() {
         setShowAutopilotConfirm(false);
     };
 
-    const generateInviteLink = () => {
-        // TODO: POST /api/team/invite { role: selectedRole }
-        const mockLink = `https://app.setdm.ai/invite/${selectedRole}_${Math.random().toString(36).substring(7)}`;
-        setInviteLink(mockLink);
+    // =========================================================================
+    // TEAM MANAGEMENT
+    // =========================================================================
+
+    const loadTeamData = useCallback(async () => {
+        if (!activeWorkspaceId) return;
+
+        setIsLoadingTeam(true);
+        try {
+            const [membersRes, invitesRes] = await Promise.all([authorizedFetch(TEAM_ENDPOINTS.listMembers), authorizedFetch(TEAM_ENDPOINTS.listInvites)]);
+
+            if (membersRes.ok) {
+                const membersData = await membersRes.json();
+                setTeamMembers(membersData.data || []);
+            }
+
+            if (invitesRes.ok) {
+                const invitesData = await invitesRes.json();
+                setPendingInvites(invitesData.data || []);
+            }
+        } catch (error) {
+            console.error("Failed to load team data:", error);
+        } finally {
+            setIsLoadingTeam(false);
+        }
+    }, [activeWorkspaceId, authorizedFetch]);
+
+    const createInvite = async () => {
+        if (!inviteEmail.trim()) {
+            toast.error("Please enter an email address.");
+            return;
+        }
+
+        setIsCreatingInvite(true);
+        try {
+            const response = await authorizedFetch(TEAM_ENDPOINTS.createInvite, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: inviteEmail.trim(), role: selectedRole }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || "Failed to create invite.");
+            }
+
+            setInviteLink(data.data.inviteUrl);
+            setInviteEmailSent(data.data.emailSent || false);
+
+            if (data.data.emailSent) {
+                toast.success(`Invite email sent to ${inviteEmail}`);
+            } else {
+                toast.success(`Invite created for ${inviteEmail}. Share the link below.`);
+            }
+
+            // Refresh pending invites
+            loadTeamData();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to create invite.");
+        } finally {
+            setIsCreatingInvite(false);
+        }
     };
 
     const copyInviteLink = () => {
@@ -149,11 +225,70 @@ export default function Settings() {
     const closeInviteDialog = () => {
         setInviteDialogOpen(false);
         setInviteLink(null);
-        setSelectedRole("admin");
+        setInviteEmailSent(false);
+        setInviteEmail("");
+        setSelectedRole("editor");
         setLinkCopied(false);
     };
 
-    // Load settings from backend
+    const cancelInvite = async (inviteId: string) => {
+        try {
+            const response = await authorizedFetch(TEAM_ENDPOINTS.deleteInvite(inviteId), {
+                method: "DELETE",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to cancel invite.");
+            }
+
+            setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId));
+            toast.success("Invite cancelled.");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to cancel invite.");
+        }
+    };
+
+    const confirmDeleteMember = (member: TeamMember) => {
+        setMemberToDelete(member);
+        setDeleteConfirmOpen(true);
+    };
+
+    const removeMember = async () => {
+        if (!memberToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            const response = await authorizedFetch(TEAM_ENDPOINTS.removeMember(memberToDelete.id), {
+                method: "DELETE",
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.message || "Failed to remove member.");
+            }
+
+            setTeamMembers((prev) => prev.filter((m) => m.id !== memberToDelete.id));
+            toast.success(`${memberToDelete.name || memberToDelete.email} has been removed.`);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to remove member.");
+        } finally {
+            setIsDeleting(false);
+            setDeleteConfirmOpen(false);
+            setMemberToDelete(null);
+        }
+    };
+
+    // Load team data when workspace changes
+    useEffect(() => {
+        if (activeWorkspaceId) {
+            loadTeamData();
+        }
+    }, [activeWorkspaceId, loadTeamData]);
+
+    // =========================================================================
+    // SETTINGS API
+    // =========================================================================
+
     const loadSettings = useCallback(
         async (signal?: AbortSignal) => {
             if (!activeWorkspaceId) {
@@ -209,7 +344,6 @@ export default function Settings() {
         return () => abortController.abort();
     }, [activeWorkspaceId, loadSettings]);
 
-    // Save settings to backend
     const handleSave = async () => {
         setIsSaving(true);
         try {
@@ -285,9 +419,6 @@ export default function Settings() {
             .split("\n")
             .map((s) => s.trim())
             .filter(Boolean);
-
-    // Get team members with owner fallback
-    const teamMembers: TeamMember[] = settings.team.members.length > 0 ? settings.team.members : [{ id: "owner", name: user?.username || "Owner", email: "", role: "admin", isOwner: true }];
 
     return (
         <AppLayout>
@@ -521,7 +652,7 @@ export default function Settings() {
                                     className="mt-1.5 min-h-[100px]"
                                     disabled={isLoadingSettings}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">One per line. AI engages when messages match these patterns (age + country, specific questions, etc.)</p>
+                                <p className="text-xs text-muted-foreground mt-1">One per line. AI engages when messages match these patterns.</p>
                             </div>
                         </div>
                     </div>
@@ -534,7 +665,7 @@ export default function Settings() {
                             </div>
                             <div>
                                 <h3 className="font-semibold text-foreground">Ignore These People</h3>
-                                <p className="text-sm text-muted-foreground">AI will not respond to these messages unless they also send a trigger message. This is just for extra clarity.</p>
+                                <p className="text-sm text-muted-foreground">AI will not respond to these messages unless they also send a trigger message.</p>
                             </div>
                         </div>
 
@@ -617,65 +748,6 @@ export default function Settings() {
                         </div>
                     </div>
 
-                    {/* Notifications */}
-                    <div className="rounded-lg bg-card p-4 sm:p-6 shadow-card">
-                        <div className="flex items-start gap-3 mb-4 sm:mb-6">
-                            <div className="rounded-lg bg-primary/10 p-2">
-                                <Bell className="h-5 w-5 text-primary" />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-foreground">Notifications</h3>
-                                <p className="text-sm text-muted-foreground">What alerts you receive</p>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div>
-                                <Label>Notify me when...</Label>
-                                <div className="mt-2 space-y-2">
-                                    <div className="flex items-center gap-3">
-                                        <Switch checked={settings.notifications.notifyQualified} onCheckedChange={(v) => updateNotifications({ notifyQualified: v })} disabled={isLoadingSettings} />
-                                        <span className="text-sm">New qualified lead</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <Switch checked={settings.notifications.notifyCallBooked} onCheckedChange={(v) => updateNotifications({ notifyCallBooked: v })} disabled={isLoadingSettings} />
-                                        <span className="text-sm">New call booked</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <Switch
-                                            checked={settings.notifications.notifyNeedsReview}
-                                            onCheckedChange={(v) => updateNotifications({ notifyNeedsReview: v })}
-                                            disabled={isLoadingSettings}
-                                        />
-                                        <span className="text-sm">AI needs review</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <Switch checked={settings.notifications.notifyWhenFlag} onCheckedChange={(v) => updateNotifications({ notifyWhenFlag: v })} disabled={isLoadingSettings} />
-                                        <span className="text-sm">Conversation flagged</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <Label>Digest Frequency</Label>
-                                <Select
-                                    value={settings.notifications.digestFrequency}
-                                    onValueChange={(v) => updateNotifications({ digestFrequency: v as WorkspaceSettings["notifications"]["digestFrequency"] })}
-                                    disabled={isLoadingSettings}
-                                >
-                                    <SelectTrigger className="mt-1.5 w-full sm:w-64">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="realtime">Real-time</SelectItem>
-                                        <SelectItem value="hourly">Hourly</SelectItem>
-                                        <SelectItem value="daily">Daily</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Team Members */}
                     <div className="rounded-lg bg-card p-4 sm:p-6 shadow-card">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 sm:mb-6">
@@ -698,56 +770,81 @@ export default function Settings() {
                                 <DialogTrigger asChild>
                                     <Button className="w-full sm:w-auto gap-2">
                                         <UserPlus className="h-4 w-4" />
-                                        Invite New Member
+                                        Invite Member
                                     </Button>
                                 </DialogTrigger>
                                 <DialogContent className="sm:max-w-md">
                                     <DialogHeader>
-                                        <DialogTitle>Invite New Member</DialogTitle>
-                                        <DialogDescription className="sr-only">Select a role and generate an invite link</DialogDescription>
+                                        <DialogTitle>Invite Team Member</DialogTitle>
+                                        <DialogDescription>Send an invite link to add someone to your team.</DialogDescription>
                                     </DialogHeader>
 
                                     {!inviteLink ? (
                                         <div className="space-y-4 py-4">
                                             <div>
-                                                <Label className="text-base font-semibold">Select Role</Label>
-                                                <RadioGroup value={selectedRole} onValueChange={(value) => setSelectedRole(value as TeamRole)} className="mt-3 space-y-3">
+                                                <Label htmlFor="invite-email">Email Address</Label>
+                                                <Input
+                                                    id="invite-email"
+                                                    type="email"
+                                                    value={inviteEmail}
+                                                    onChange={(e) => setInviteEmail(e.target.value)}
+                                                    placeholder="teammate@example.com"
+                                                    className="mt-1.5"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <Label className="text-sm font-medium">Role</Label>
+                                                <RadioGroup value={selectedRole} onValueChange={(value) => setSelectedRole(value as TeamRole)} className="mt-2 space-y-2">
                                                     {(["admin", "editor", "viewer"] as TeamRole[]).map((role) => (
                                                         <div key={role} className="flex items-start space-x-3">
-                                                            <RadioGroupItem value={role} id={role} className="mt-1" />
-                                                            <Label htmlFor={role} className="cursor-pointer font-normal">
+                                                            <RadioGroupItem value={role} id={role} className="mt-0.5" />
+                                                            <Label htmlFor={role} className="cursor-pointer font-normal text-sm">
                                                                 <span className="font-medium capitalize">{role}</span>
+                                                                <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[role]}</p>
                                                             </Label>
                                                         </div>
                                                     ))}
                                                 </RadioGroup>
                                             </div>
 
-                                            <p className="text-sm text-muted-foreground">{ROLE_DESCRIPTIONS[selectedRole]}</p>
-
-                                            <Button onClick={generateInviteLink} className="w-full">
-                                                Generate A Link
+                                            <Button onClick={createInvite} className="w-full" disabled={isCreatingInvite || !inviteEmail.trim()}>
+                                                {isCreatingInvite ? (
+                                                    <>
+                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                        Creating...
+                                                    </>
+                                                ) : (
+                                                    "Create Invite Link"
+                                                )}
                                             </Button>
                                         </div>
                                     ) : (
                                         <div className="space-y-4 py-4">
+                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                                                <p className="text-sm font-medium text-green-600 dark:text-green-400">{inviteEmailSent ? "✉️ Invite email sent!" : "Invite created!"}</p>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    {inviteEmailSent
+                                                        ? `We've sent an invite to ${inviteEmail}. The link expires in 24 hours.`
+                                                        : `Share this link with ${inviteEmail}. It expires in 24 hours.`}
+                                                </p>
+                                            </div>
+
                                             <div>
-                                                <Label className="text-base font-semibold capitalize">{selectedRole}</Label>
-                                                <p className="text-sm text-muted-foreground mt-1">{ROLE_DESCRIPTIONS[selectedRole]}</p>
+                                                {inviteEmailSent && <p className="text-xs text-muted-foreground mb-2">You can also copy the link to share directly:</p>}
+                                                <div className="flex items-center gap-2">
+                                                    <Input value={inviteLink || ""} readOnly className="flex-1 text-sm bg-muted font-mono text-xs" />
+                                                    <Button variant="outline" size="sm" onClick={copyInviteLink} className="gap-1 shrink-0">
+                                                        {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                                        {linkCopied ? "Copied" : "Copy"}
+                                                    </Button>
+                                                </div>
                                             </div>
 
-                                            <div className="flex items-center gap-2">
-                                                <Input value={inviteLink} readOnly className="flex-1 text-sm bg-muted" />
-                                                <Button variant="outline" size="sm" onClick={copyInviteLink} className="gap-1 shrink-0">
-                                                    {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                                                    {linkCopied ? "Copied" : "Copy"}
-                                                </Button>
-                                            </div>
-
-                                            <p className="text-sm text-muted-foreground text-center italic">Note that this link is valid for 24 hours and can be used only once.</p>
+                                            <p className="text-xs text-muted-foreground text-center">When they click the link, they'll set up their account and access the platform.</p>
 
                                             <Button onClick={closeInviteDialog} className="w-full">
-                                                Got It
+                                                Done
                                             </Button>
                                         </div>
                                     )}
@@ -755,108 +852,76 @@ export default function Settings() {
                             </Dialog>
                         </div>
 
-                        {/* Owner Section */}
-                        <div className="mb-4">
-                            <h4 className="font-medium text-foreground mb-1">Owner</h4>
-                            <p className="text-xs text-muted-foreground mb-3">Owner controls all settings and team management. There is only one owner per account.</p>
-
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b border-border">
-                                            <th className="text-left text-sm font-medium text-muted-foreground py-2">Name</th>
-                                            <th className="text-left text-sm font-medium text-muted-foreground py-2 hidden sm:table-cell">Role</th>
-                                            <th className="text-right text-sm font-medium text-muted-foreground py-2"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {teamMembers
-                                            .filter((m) => m.isOwner)
-                                            .map((member) => (
-                                                <tr key={member.id} className="border-b border-border last:border-0">
-                                                    <td className="py-3">
-                                                        <div className="flex items-center gap-3">
-                                                            <Avatar className="h-8 w-8">
-                                                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                                                    {member.name
-                                                                        .split(" ")
-                                                                        .map((n) => n[0])
-                                                                        .join("")
-                                                                        .toUpperCase()}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                            <div className="min-w-0">
-                                                                <p className="font-medium text-sm truncate">{member.name}</p>
-                                                                <p className="text-xs text-muted-foreground truncate">{member.email}</p>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3 hidden sm:table-cell">
-                                                        <span className="text-sm text-muted-foreground">Owner</span>
-                                                    </td>
-                                                    <td className="py-3 text-right">
-                                                        <Button variant="ghost" size="sm" className="text-primary">
-                                                            Edit
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
+                        {isLoadingTeam ? (
+                            <div className="flex items-center justify-center py-8 text-muted-foreground">
+                                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                Loading team...
                             </div>
-                        </div>
-
-                        {/* Team Members Section */}
-                        {teamMembers.filter((m) => !m.isOwner).length > 0 && (
-                            <div>
-                                <h4 className="font-medium text-foreground mb-1">Team Members</h4>
-                                <p className="text-xs text-muted-foreground mb-3">People you've invited to help manage your account.</p>
-
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-border">
-                                                <th className="text-left text-sm font-medium text-muted-foreground py-2">Name</th>
-                                                <th className="text-left text-sm font-medium text-muted-foreground py-2 hidden sm:table-cell">Role</th>
-                                                <th className="text-right text-sm font-medium text-muted-foreground py-2"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {teamMembers
-                                                .filter((m) => !m.isOwner)
-                                                .map((member) => (
-                                                    <tr key={member.id} className="border-b border-border last:border-0">
-                                                        <td className="py-3">
-                                                            <div className="flex items-center gap-3">
-                                                                <Avatar className="h-8 w-8">
-                                                                    <AvatarFallback className="bg-muted text-muted-foreground text-xs">
-                                                                        {member.name
-                                                                            .split(" ")
-                                                                            .map((n) => n[0])
-                                                                            .join("")
-                                                                            .toUpperCase()}
-                                                                    </AvatarFallback>
-                                                                </Avatar>
-                                                                <div className="min-w-0">
-                                                                    <p className="font-medium text-sm truncate">{member.name}</p>
-                                                                    <p className="text-xs text-muted-foreground truncate">{member.email}</p>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3 hidden sm:table-cell">
-                                                            <span className="text-sm capitalize text-muted-foreground">{member.role}</span>
-                                                        </td>
-                                                        <td className="py-3 text-right">
-                                                            <Button variant="ghost" size="sm" className="text-primary">
-                                                                Edit
-                                                            </Button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                        </tbody>
-                                    </table>
+                        ) : (
+                            <>
+                                {/* Team Members List */}
+                                <div className="space-y-2">
+                                    {teamMembers.map((member) => (
+                                        <div key={member.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-9 w-9">
+                                                    <AvatarFallback className={member.isOwner ? "bg-primary/10 text-primary" : "bg-muted"}>
+                                                        {(member.name || member.email || "?")
+                                                            .split(" ")
+                                                            .map((n) => n[0])
+                                                            .join("")
+                                                            .toUpperCase()
+                                                            .slice(0, 2)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p className="font-medium text-sm">{member.name || member.email}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {member.isOwner ? "Owner" : member.role} {member.email && !member.isOwner && `• ${member.email}`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {!member.isOwner && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                    onClick={() => confirmDeleteMember(member)}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
-                            </div>
+
+                                {/* Pending Invites */}
+                                {pendingInvites.length > 0 && (
+                                    <div className="mt-6">
+                                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Pending Invites</h4>
+                                        <div className="space-y-2">
+                                            {pendingInvites.map((invite) => (
+                                                <div key={invite.id} className="flex items-center justify-between p-3 rounded-lg border border-dashed border-border bg-muted/30">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                                                            <UserPlus className="h-4 w-4 text-muted-foreground" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-medium text-sm">{invite.email}</p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {invite.role} • Expires {new Date(invite.expiresAt).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => cancelInvite(invite.id)}>
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -890,6 +955,24 @@ export default function Settings() {
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction onClick={confirmAutopilot}>Enable Autopilot</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Delete Member Confirmation Dialog */}
+                <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Remove Team Member?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Are you sure you want to remove <strong>{memberToDelete?.name || memberToDelete?.email}</strong> from your team? They will lose access to this workspace immediately.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={removeMember} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                {isDeleting ? "Removing..." : "Remove"}
+                            </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
