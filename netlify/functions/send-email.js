@@ -11,21 +11,46 @@ const SIGNATURE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const verifyEmailSignature = (payload, signature, timestamp) => {
     // Check if timestamp is within expiry window
     const now = Date.now();
-    if (now - timestamp > SIGNATURE_EXPIRY_MS) {
-        return { valid: false, error: "Signature expired" };
+    const timeDiff = now - timestamp;
+    console.log("Signature verification:", {
+        timeDiff,
+        expired: timeDiff > SIGNATURE_EXPIRY_MS,
+        secretLength: EMAIL_SIGNING_SECRET.length,
+        secretPreview: EMAIL_SIGNING_SECRET.substring(0, 4) + "...",
+    });
+
+    if (timeDiff > SIGNATURE_EXPIRY_MS) {
+        return { valid: false, error: `Signature expired (${Math.round(timeDiff / 1000)}s old, max ${SIGNATURE_EXPIRY_MS / 1000}s)` };
     }
 
     // Recreate the signature
     const dataToSign = JSON.stringify({ ...payload, timestamp });
     const expectedSignature = crypto.createHmac("sha256", EMAIL_SIGNING_SECRET).update(dataToSign).digest("hex");
 
-    try {
-        // Use timing-safe comparison
-        const isValid = crypto.timingSafeEquals(Buffer.from(signature, "hex"), Buffer.from(expectedSignature, "hex"));
-        return { valid: isValid, error: isValid ? null : "Invalid signature" };
-    } catch {
-        return { valid: false, error: "Invalid signature format" };
+    console.log("Signature comparison:", {
+        receivedLength: signature?.length,
+        expectedLength: expectedSignature.length,
+        received: signature?.substring(0, 16) + "...",
+        expected: expectedSignature.substring(0, 16) + "...",
+        signatureType: typeof signature,
+    });
+
+    // Check if signature is valid hex and correct length
+    if (!signature || typeof signature !== "string") {
+        return { valid: false, error: `Invalid signature: expected string, got ${typeof signature}` };
     }
+
+    if (signature.length !== 64) {
+        return { valid: false, error: `Invalid signature length: expected 64, got ${signature.length}` };
+    }
+
+    if (!/^[a-f0-9]+$/i.test(signature)) {
+        return { valid: false, error: "Invalid signature: not valid hex" };
+    }
+
+    // Simple string comparison (both are hex strings of same length)
+    const isValid = signature.toLowerCase() === expectedSignature.toLowerCase();
+    return { valid: isValid, error: isValid ? null : "Invalid signature - secret mismatch" };
 };
 
 // Create transporter with Gmail
@@ -180,8 +205,17 @@ exports.handler = async (event) => {
         const body = JSON.parse(event.body);
         const { signature, timestamp, ...emailData } = body;
 
+        console.log("Email request received:", {
+            type: emailData.type,
+            to: emailData.to,
+            hasSignature: !!signature,
+            hasTimestamp: !!timestamp,
+            timestamp,
+        });
+
         // Verify signature is present
         if (!signature || !timestamp) {
+            console.error("Missing signature or timestamp");
             return {
                 statusCode: 401,
                 body: JSON.stringify({ error: "Missing signature", sent: false }),
@@ -191,6 +225,7 @@ exports.handler = async (event) => {
         // Verify the signature
         const verification = verifyEmailSignature(emailData, signature, timestamp);
         if (!verification.valid) {
+            console.error("Signature verification failed:", verification.error);
             return {
                 statusCode: 401,
                 body: JSON.stringify({ error: verification.error, sent: false }),

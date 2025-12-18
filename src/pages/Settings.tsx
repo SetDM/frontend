@@ -215,6 +215,10 @@ export default function Settings() {
                 });
 
                 const emailResult = await emailResponse.json();
+                console.log("Email function response:", emailResult);
+                if (!emailResponse.ok || emailResult.error) {
+                    console.error("Email function error:", emailResult.error || emailResponse.statusText);
+                }
                 emailSent = emailResult.sent === true;
             } catch (emailError) {
                 console.error("Failed to send email:", emailError);

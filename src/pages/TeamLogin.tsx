@@ -108,7 +108,7 @@ export default function TeamLogin() {
             // If we got a login URL back, send the email via Netlify function with signed payload
             if (data.data?.emailPayload) {
                 try {
-                    await fetch(EMAIL_FUNCTION_URL, {
+                    const emailResponse = await fetch(EMAIL_FUNCTION_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
@@ -117,6 +117,11 @@ export default function TeamLogin() {
                             timestamp: data.data.emailTimestamp,
                         }),
                     });
+                    const emailResult = await emailResponse.json();
+                    console.log("Email function response:", emailResult);
+                    if (!emailResponse.ok || emailResult.error) {
+                        console.error("Email function error:", emailResult.error || emailResponse.statusText);
+                    }
                 } catch (emailErr) {
                     console.error("Failed to send email:", emailErr);
                 }
@@ -155,7 +160,7 @@ export default function TeamLogin() {
             // Send the email via Netlify function with signed payload
             if (data.data?.emailPayload) {
                 try {
-                    await fetch(EMAIL_FUNCTION_URL, {
+                    const emailResponse = await fetch(EMAIL_FUNCTION_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
@@ -164,6 +169,11 @@ export default function TeamLogin() {
                             timestamp: data.data.emailTimestamp,
                         }),
                     });
+                    const emailResult = await emailResponse.json();
+                    console.log("Email function response:", emailResult);
+                    if (!emailResponse.ok || emailResult.error) {
+                        console.error("Email function error:", emailResult.error || emailResponse.statusText);
+                    }
                 } catch (emailErr) {
                     console.error("Failed to send email:", emailErr);
                 }
