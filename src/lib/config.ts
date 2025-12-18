@@ -56,6 +56,7 @@ export const TEAM_ENDPOINTS = {
     removeMember: (memberId: string) => `${API_BASE_URL}/team/members/${memberId}`,
 
     // Auth
+    getWorkspaces: `${API_BASE_URL}/team/auth/workspaces`,
     requestLogin: `${API_BASE_URL}/team/auth/request-login`,
     loginWithToken: (token: string) => `${API_BASE_URL}/team/auth/login/${token}`,
 };
