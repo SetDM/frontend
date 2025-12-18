@@ -1,6 +1,3 @@
-// TODO Vaibhav: GET /api/settings on load, POST /api/settings on save
-// Instagram OAuth: Connect button triggers OAuth flow, store token on backend
-
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -19,17 +16,9 @@ import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
 import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS } from "@/lib/config";
-import type { WorkspaceSettings } from "@/types";
+import type { WorkspaceSettings, TeamMember } from "@/types";
 
 type TeamRole = "admin" | "editor" | "viewer";
-
-interface TeamMember {
-    id: string;
-    name: string;
-    email: string;
-    role: TeamRole;
-    isOwner?: boolean;
-}
 
 const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
     admin: "Admins can manage all settings, team members, and have full access to all features except ownership transfer.",
@@ -39,14 +28,17 @@ const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
 
 const DEFAULT_SETTINGS: WorkspaceSettings = {
     profile: {
-        coachName: "Iris",
-        brandName: "FitWithIris",
+        coachName: "",
+        brandName: "",
         calendarLink: "",
     },
     autopilot: {
+        enabled: false,
         mode: "full",
         replyWindowStart: "07:00",
         replyWindowEnd: "22:00",
+        responseDelayValue: 30,
+        responseDelayUnit: "seconds",
         handleStoryReplies: true,
         handleCTAReplies: true,
         handleColdDMs: false,
@@ -54,10 +46,17 @@ const DEFAULT_SETTINGS: WorkspaceSettings = {
         handoffAngry: true,
         handoffQualified: true,
     },
+    entryPoints: {
+        triggerExamples: [],
+    },
+    ignoreRules: {
+        ignorePatterns: [],
+    },
     filters: {
         minAge: 18,
         minFollowers: null,
         hidePrivateAccounts: false,
+        blockedCountries: [],
         allowedCountries: ["USA", "UK", "Canada", "Australia"],
         allowedLanguages: ["English"],
     },
@@ -65,22 +64,13 @@ const DEFAULT_SETTINGS: WorkspaceSettings = {
         notifyQualified: true,
         notifyCallBooked: true,
         notifyNeedsReview: true,
+        notifyWhenFlag: true,
         digestFrequency: "realtime",
     },
+    team: {
+        members: [],
+    },
 };
-
-const formatListField = (items?: string[]) => {
-    if (!Array.isArray(items) || items.length === 0) {
-        return "";
-    }
-    return items.join(", ");
-};
-
-const parseListField = (input: string) =>
-    input
-        .split(/[,\n]/)
-        .map((entry) => entry.trim())
-        .filter((entry) => Boolean(entry));
 
 export default function Settings() {
     usePageTitle("Settings");
@@ -91,60 +81,59 @@ export default function Settings() {
     const [isSaving, setIsSaving] = useState(false);
     const [isUnlinking, setIsUnlinking] = useState(false);
 
-    // Account settings
-    const [coachName, setCoachName] = useState(DEFAULT_SETTINGS.profile.coachName);
-    const [brandName, setBrandName] = useState(DEFAULT_SETTINGS.profile.brandName);
-    const [calendarLink, setCalendarLink] = useState(DEFAULT_SETTINGS.profile.calendarLink);
+    // Store all settings in a single state object
+    const [settings, setSettings] = useState<WorkspaceSettings>(DEFAULT_SETTINGS);
 
-    // Autopilot settings
-    const [autopilotEnabled, setAutopilotEnabled] = useState(false);
+    // Autopilot confirmation dialog
     const [showAutopilotConfirm, setShowAutopilotConfirm] = useState(false);
-    const [replyWindowStart, setReplyWindowStart] = useState(DEFAULT_SETTINGS.autopilot.replyWindowStart);
-    const [replyWindowEnd, setReplyWindowEnd] = useState(DEFAULT_SETTINGS.autopilot.replyWindowEnd);
-    const [responseDelayValue, setResponseDelayValue] = useState("");
-    const [responseDelayUnit, setResponseDelayUnit] = useState("seconds");
 
-    const handleAutopilotToggle = (checked: boolean) => {
-        if (checked) {
-            setShowAutopilotConfirm(true);
-        } else {
-            setAutopilotEnabled(false);
-        }
-    };
-
-    const confirmAutopilot = () => {
-        setAutopilotEnabled(true);
-        setShowAutopilotConfirm(false);
-    };
-
-    // Entry points - determines when AI starts engaging
-    const [triggerExamples, setTriggerExamples] = useState("");
-
-    // Ignore rules - spam patterns to ignore
-    const [ignorePatterns, setIgnorePatterns] = useState("");
-
-    // Qualification criteria
-    const [blockedCountries, setBlockedCountries] = useState("");
-    const [allowedLanguages, setAllowedLanguages] = useState(formatListField(DEFAULT_SETTINGS.filters.allowedLanguages));
-    const [minAge, setMinAge] = useState(String(DEFAULT_SETTINGS.filters.minAge));
-
-    // Notifications
-    const [notifyQualified, setNotifyQualified] = useState(DEFAULT_SETTINGS.notifications.notifyQualified);
-    const [notifyCallBooked, setNotifyCallBooked] = useState(DEFAULT_SETTINGS.notifications.notifyCallBooked);
-    const [notifyNeedsReview, setNotifyNeedsReview] = useState(DEFAULT_SETTINGS.notifications.notifyNeedsReview);
-    const [notifyWhenFlag, setNotifyWhenFlag] = useState(true);
-    const [digestFrequency, setDigestFrequency] = useState<WorkspaceSettings["notifications"]["digestFrequency"]>(DEFAULT_SETTINGS.notifications.digestFrequency);
-
-    // Team members
-    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([{ id: "1", name: "Your Name", email: "you@example.com", role: "admin", isOwner: true }]);
+    // Team invite dialog
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
     const [selectedRole, setSelectedRole] = useState<TeamRole>("admin");
     const [inviteLink, setInviteLink] = useState<string | null>(null);
     const [linkCopied, setLinkCopied] = useState(false);
 
+    // Helper to update nested settings
+    const updateProfile = (updates: Partial<WorkspaceSettings["profile"]>) => {
+        setSettings((prev) => ({ ...prev, profile: { ...prev.profile, ...updates } }));
+    };
+
+    const updateAutopilot = (updates: Partial<WorkspaceSettings["autopilot"]>) => {
+        setSettings((prev) => ({ ...prev, autopilot: { ...prev.autopilot, ...updates } }));
+    };
+
+    const updateEntryPoints = (updates: Partial<WorkspaceSettings["entryPoints"]>) => {
+        setSettings((prev) => ({ ...prev, entryPoints: { ...prev.entryPoints, ...updates } }));
+    };
+
+    const updateIgnoreRules = (updates: Partial<WorkspaceSettings["ignoreRules"]>) => {
+        setSettings((prev) => ({ ...prev, ignoreRules: { ...prev.ignoreRules, ...updates } }));
+    };
+
+    const updateFilters = (updates: Partial<WorkspaceSettings["filters"]>) => {
+        setSettings((prev) => ({ ...prev, filters: { ...prev.filters, ...updates } }));
+    };
+
+    const updateNotifications = (updates: Partial<WorkspaceSettings["notifications"]>) => {
+        setSettings((prev) => ({ ...prev, notifications: { ...prev.notifications, ...updates } }));
+    };
+
+    const handleAutopilotToggle = (checked: boolean) => {
+        if (checked) {
+            setShowAutopilotConfirm(true);
+        } else {
+            updateAutopilot({ enabled: false });
+        }
+    };
+
+    const confirmAutopilot = () => {
+        updateAutopilot({ enabled: true });
+        setShowAutopilotConfirm(false);
+    };
+
     const generateInviteLink = () => {
-        // TODO Vaibhav: POST /api/team/invite { role: selectedRole }
-        const mockLink = `https://app.yourapp.com/invite/${selectedRole}_${Math.random().toString(36).substring(7)}`;
+        // TODO: POST /api/team/invite { role: selectedRole }
+        const mockLink = `https://app.setdm.ai/invite/${selectedRole}_${Math.random().toString(36).substring(7)}`;
         setInviteLink(mockLink);
     };
 
@@ -164,33 +153,7 @@ export default function Settings() {
         setLinkCopied(false);
     };
 
-    // API Integration
-    const applySettingsToState = useCallback((settings: WorkspaceSettings) => {
-        if (!settings) {
-            return;
-        }
-
-        setCoachName(settings.profile?.coachName ?? "");
-        setBrandName(settings.profile?.brandName ?? "");
-        setCalendarLink(settings.profile?.calendarLink ?? "");
-
-        setAutopilotEnabled(settings.autopilot?.mode === "full");
-        setReplyWindowStart(settings.autopilot?.replyWindowStart ?? "07:00");
-        setReplyWindowEnd(settings.autopilot?.replyWindowEnd ?? "22:00");
-
-        setAllowedLanguages(formatListField(settings.filters?.allowedLanguages));
-        setMinAge(String(settings.filters?.minAge ?? 18));
-
-        setNotifyQualified(settings.notifications?.notifyQualified ?? true);
-        setNotifyCallBooked(settings.notifications?.notifyCallBooked ?? true);
-        setNotifyNeedsReview(settings.notifications?.notifyNeedsReview ?? true);
-        setDigestFrequency(settings.notifications?.digestFrequency ?? "realtime");
-    }, []);
-
-    const resetSettingsState = useCallback(() => {
-        applySettingsToState(DEFAULT_SETTINGS);
-    }, [applySettingsToState]);
-
+    // Load settings from backend
     const loadSettings = useCallback(
         async (signal?: AbortSignal) => {
             if (!activeWorkspaceId) {
@@ -201,124 +164,80 @@ export default function Settings() {
             setIsLoadingSettings(true);
             try {
                 const response = await authorizedFetch(SETTINGS_ENDPOINTS.workspace, { signal });
-                let payload: unknown = null;
-                try {
-                    payload = await response.json();
-                } catch {
-                    payload = null;
-                }
+                const payload = await response.json().catch(() => null);
 
                 if (!response.ok) {
-                    const message =
-                        payload && typeof payload === "object" && payload !== null && "message" in payload && typeof (payload as { message?: unknown }).message === "string"
-                            ? ((payload as { message?: string }).message as string)
-                            : "Failed to load settings.";
+                    const message = payload?.message || "Failed to load settings.";
                     throw new Error(message);
                 }
 
-                const data =
-                    payload && typeof payload === "object" && payload !== null && "data" in payload ? ((payload as { data?: WorkspaceSettings }).data as WorkspaceSettings | undefined) : undefined;
-
-                if (data) {
-                    applySettingsToState(data);
+                if (payload?.data) {
+                    setSettings((prev) => ({
+                        profile: { ...prev.profile, ...payload.data.profile },
+                        autopilot: { ...prev.autopilot, ...payload.data.autopilot },
+                        entryPoints: { ...prev.entryPoints, ...payload.data.entryPoints },
+                        ignoreRules: { ...prev.ignoreRules, ...payload.data.ignoreRules },
+                        filters: { ...prev.filters, ...payload.data.filters },
+                        notifications: { ...prev.notifications, ...payload.data.notifications },
+                        team: { ...prev.team, ...payload.data.team },
+                    }));
                 }
             } catch (error) {
+                if (signal?.aborted) return;
                 console.error(error);
                 toast.error(error instanceof Error ? error.message : "Failed to load settings.");
             } finally {
-                setIsLoadingSettings(false);
+                if (!signal?.aborted) {
+                    setIsLoadingSettings(false);
+                }
             }
         },
-        [activeWorkspaceId, applySettingsToState, authorizedFetch]
+        [activeWorkspaceId, authorizedFetch]
     );
 
     useEffect(() => {
         const abortController = new AbortController();
-        resetSettingsState();
+        setSettings(DEFAULT_SETTINGS);
 
         if (!activeWorkspaceId) {
             setIsLoadingSettings(false);
-            return () => {
-                abortController.abort();
-            };
+            return () => abortController.abort();
         }
 
         loadSettings(abortController.signal);
 
-        return () => {
-            abortController.abort();
-        };
-    }, [activeWorkspaceId, loadSettings, resetSettingsState]);
+        return () => abortController.abort();
+    }, [activeWorkspaceId, loadSettings]);
 
-    const buildSettingsPayload = (): WorkspaceSettings => {
-        const parsedMinAge = Math.max(0, Number.parseInt(minAge, 10) || 18);
-
-        return {
-            profile: {
-                coachName: coachName.trim(),
-                brandName: brandName.trim(),
-                calendarLink: calendarLink.trim(),
-            },
-            autopilot: {
-                mode: autopilotEnabled ? "full" : "off",
-                replyWindowStart,
-                replyWindowEnd,
-                handleStoryReplies: true,
-                handleCTAReplies: true,
-                handleColdDMs: false,
-                handoffInjuries: true,
-                handoffAngry: true,
-                handoffQualified: true,
-            },
-            filters: {
-                minAge: parsedMinAge,
-                minFollowers: null,
-                hidePrivateAccounts: false,
-                allowedCountries: parseListField(blockedCountries.length ? "" : "USA, UK, Canada, Australia"),
-                allowedLanguages: parseListField(allowedLanguages),
-            },
-            notifications: {
-                notifyQualified,
-                notifyCallBooked,
-                notifyNeedsReview,
-                digestFrequency,
-            },
-        };
-    };
-
+    // Save settings to backend
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            const payload = buildSettingsPayload();
             const response = await authorizedFetch(SETTINGS_ENDPOINTS.workspace, {
                 method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(settings),
             });
 
-            let responseBody: unknown = null;
-            try {
-                responseBody = await response.json();
-            } catch {
-                responseBody = null;
-            }
+            const payload = await response.json().catch(() => null);
 
             if (!response.ok) {
-                const message =
-                    responseBody && typeof responseBody === "object" && responseBody !== null && "message" in responseBody && typeof (responseBody as { message?: unknown }).message === "string"
-                        ? ((responseBody as { message?: string }).message as string)
-                        : "Failed to save settings.";
+                const message = payload?.message || "Failed to save settings.";
                 throw new Error(message);
             }
 
-            const updatedSettings =
-                responseBody && typeof responseBody === "object" && responseBody !== null && "data" in responseBody
-                    ? ((responseBody as { data?: WorkspaceSettings }).data as WorkspaceSettings | undefined)
-                    : undefined;
+            if (payload?.data) {
+                setSettings((prev) => ({
+                    profile: { ...prev.profile, ...payload.data.profile },
+                    autopilot: { ...prev.autopilot, ...payload.data.autopilot },
+                    entryPoints: { ...prev.entryPoints, ...payload.data.entryPoints },
+                    ignoreRules: { ...prev.ignoreRules, ...payload.data.ignoreRules },
+                    filters: { ...prev.filters, ...payload.data.filters },
+                    notifications: { ...prev.notifications, ...payload.data.notifications },
+                    team: { ...prev.team, ...payload.data.team },
+                }));
+            }
 
-            applySettingsToState(updatedSettings ?? payload);
             toast.success("Settings saved successfully!");
         } catch (error) {
             console.error(error);
@@ -335,20 +254,16 @@ export default function Settings() {
     const handleUnlinkInstagram = async () => {
         const confirmation = window.confirm("Disconnecting will remove access for this Instagram account. Continue?");
 
-        if (!confirmation) {
-            return;
-        }
+        if (!confirmation) return;
 
         setIsUnlinking(true);
 
         try {
-            const response = await authorizedFetch(AUTH_ENDPOINTS.unlink, {
-                method: "POST",
-            });
+            const response = await authorizedFetch(AUTH_ENDPOINTS.unlink, { method: "POST" });
 
             if (!response.ok) {
                 const payload = await response.json().catch(() => null);
-                const message = (payload && typeof payload === "object" && "message" in payload ? (payload as { message?: string }).message : null) || "Failed to disconnect Instagram account.";
+                const message = payload?.message || "Failed to disconnect Instagram account.";
                 throw new Error(message);
             }
 
@@ -362,6 +277,17 @@ export default function Settings() {
             setIsUnlinking(false);
         }
     };
+
+    // Helper to convert array to newline-separated string for textarea
+    const arrayToText = (arr: string[]) => arr.join("\n");
+    const textToArray = (text: string) =>
+        text
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+    // Get team members with owner fallback
+    const teamMembers: TeamMember[] = settings.team.members.length > 0 ? settings.team.members : [{ id: "owner", name: user?.username || "Owner", email: "", role: "admin", isOwner: true }];
 
     return (
         <AppLayout>
@@ -389,11 +315,25 @@ export default function Settings() {
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div>
                                 <Label htmlFor="coach-name">Your Name</Label>
-                                <Input id="coach-name" value={coachName} onChange={(e) => setCoachName(e.target.value)} placeholder="Your name" className="mt-1.5" disabled={isLoadingSettings} />
+                                <Input
+                                    id="coach-name"
+                                    value={settings.profile.coachName}
+                                    onChange={(e) => updateProfile({ coachName: e.target.value })}
+                                    placeholder="Your name"
+                                    className="mt-1.5"
+                                    disabled={isLoadingSettings}
+                                />
                             </div>
                             <div>
                                 <Label htmlFor="brand-name">Brand Name</Label>
-                                <Input id="brand-name" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Your brand" className="mt-1.5" disabled={isLoadingSettings} />
+                                <Input
+                                    id="brand-name"
+                                    value={settings.profile.brandName}
+                                    onChange={(e) => updateProfile({ brandName: e.target.value })}
+                                    placeholder="Your brand"
+                                    className="mt-1.5"
+                                    disabled={isLoadingSettings}
+                                />
                             </div>
                         </div>
 
@@ -439,8 +379,8 @@ export default function Settings() {
                             </Label>
                             <Input
                                 id="calendar-link"
-                                value={calendarLink}
-                                onChange={(e) => setCalendarLink(e.target.value)}
+                                value={settings.profile.calendarLink}
+                                onChange={(e) => updateProfile({ calendarLink: e.target.value })}
                                 placeholder="https://calendly.com/you"
                                 className="mt-1.5"
                                 disabled={isLoadingSettings}
@@ -469,8 +409,19 @@ export default function Settings() {
                             </div>
                             <p className="text-sm text-muted-foreground mb-3">How long the AI waits before replying (feels more human)</p>
                             <div className="flex items-center gap-2">
-                                <Input type="number" min="0" value={responseDelayValue} onChange={(e) => setResponseDelayValue(e.target.value)} className="w-20" disabled={isLoadingSettings} />
-                                <Select value={responseDelayUnit} onValueChange={setResponseDelayUnit} disabled={isLoadingSettings}>
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    value={settings.autopilot.responseDelayValue}
+                                    onChange={(e) => updateAutopilot({ responseDelayValue: parseInt(e.target.value) || 0 })}
+                                    className="w-20"
+                                    disabled={isLoadingSettings}
+                                />
+                                <Select
+                                    value={settings.autopilot.responseDelayUnit}
+                                    onValueChange={(v) => updateAutopilot({ responseDelayUnit: v as WorkspaceSettings["autopilot"]["responseDelayUnit"] })}
+                                    disabled={isLoadingSettings}
+                                >
                                     <SelectTrigger className="w-[120px]">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -491,10 +442,10 @@ export default function Settings() {
                                     <span className="font-medium text-foreground">Enable Autopilot for All Conversations</span>
                                     <p className="text-sm text-muted-foreground">AI will automatically respond to every message</p>
                                 </div>
-                                <Switch checked={autopilotEnabled} onCheckedChange={handleAutopilotToggle} className="shrink-0" disabled={isLoadingSettings} />
+                                <Switch checked={settings.autopilot.enabled} onCheckedChange={handleAutopilotToggle} className="shrink-0" disabled={isLoadingSettings} />
                             </div>
 
-                            {autopilotEnabled && (
+                            {settings.autopilot.enabled && (
                                 <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
                                     <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
                                     <div className="text-sm">
@@ -515,9 +466,21 @@ export default function Settings() {
                                 </Label>
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1.5">
                                     <div className="flex items-center gap-2">
-                                        <Input type="time" value={replyWindowStart} onChange={(e) => setReplyWindowStart(e.target.value)} className="w-full sm:w-32" disabled={isLoadingSettings} />
+                                        <Input
+                                            type="time"
+                                            value={settings.autopilot.replyWindowStart}
+                                            onChange={(e) => updateAutopilot({ replyWindowStart: e.target.value })}
+                                            className="w-full sm:w-32"
+                                            disabled={isLoadingSettings}
+                                        />
                                         <span className="text-muted-foreground shrink-0">to</span>
-                                        <Input type="time" value={replyWindowEnd} onChange={(e) => setReplyWindowEnd(e.target.value)} className="w-full sm:w-32" disabled={isLoadingSettings} />
+                                        <Input
+                                            type="time"
+                                            value={settings.autopilot.replyWindowEnd}
+                                            onChange={(e) => updateAutopilot({ replyWindowEnd: e.target.value })}
+                                            className="w-full sm:w-32"
+                                            disabled={isLoadingSettings}
+                                        />
                                     </div>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">AI only sends messages during these hours</p>
@@ -552,8 +515,8 @@ export default function Settings() {
                                 <Label htmlFor="trigger-examples">Other Trigger Messages</Label>
                                 <Textarea
                                     id="trigger-examples"
-                                    value={triggerExamples}
-                                    onChange={(e) => setTriggerExamples(e.target.value)}
+                                    value={arrayToText(settings.entryPoints.triggerExamples)}
+                                    onChange={(e) => updateEntryPoints({ triggerExamples: textToArray(e.target.value) })}
                                     placeholder="im fat&#10;how can i get like you&#10;i need help losing weight"
                                     className="mt-1.5 min-h-[100px]"
                                     disabled={isLoadingSettings}
@@ -579,8 +542,8 @@ export default function Settings() {
                             <Label htmlFor="ignore-patterns">Ignore Patterns</Label>
                             <Textarea
                                 id="ignore-patterns"
-                                value={ignorePatterns}
-                                onChange={(e) => setIgnorePatterns(e.target.value)}
+                                value={arrayToText(settings.ignoreRules.ignorePatterns)}
+                                onChange={(e) => updateIgnoreRules({ ignorePatterns: textToArray(e.target.value) })}
                                 placeholder="do you have info products&#10;coaching program info&#10;I can help you grow"
                                 className="mt-1.5 min-h-[100px]"
                                 disabled={isLoadingSettings}
@@ -606,8 +569,15 @@ export default function Settings() {
                                 <Label htmlFor="blocked-countries">Blocked Countries</Label>
                                 <Input
                                     id="blocked-countries"
-                                    value={blockedCountries}
-                                    onChange={(e) => setBlockedCountries(e.target.value)}
+                                    value={settings.filters.blockedCountries.join(", ")}
+                                    onChange={(e) =>
+                                        updateFilters({
+                                            blockedCountries: e.target.value
+                                                .split(",")
+                                                .map((s) => s.trim())
+                                                .filter(Boolean),
+                                        })
+                                    }
                                     placeholder="India, Nigeria, Philippines"
                                     className="mt-1.5"
                                     disabled={isLoadingSettings}
@@ -618,8 +588,15 @@ export default function Settings() {
                                 <Label htmlFor="allowed-languages">Languages</Label>
                                 <Input
                                     id="allowed-languages"
-                                    value={allowedLanguages}
-                                    onChange={(e) => setAllowedLanguages(e.target.value)}
+                                    value={settings.filters.allowedLanguages.join(", ")}
+                                    onChange={(e) =>
+                                        updateFilters({
+                                            allowedLanguages: e.target.value
+                                                .split(",")
+                                                .map((s) => s.trim())
+                                                .filter(Boolean),
+                                        })
+                                    }
                                     placeholder="English, Spanish"
                                     className="mt-1.5"
                                     disabled={isLoadingSettings}
@@ -627,7 +604,15 @@ export default function Settings() {
                             </div>
                             <div>
                                 <Label htmlFor="min-age">Minimum Age</Label>
-                                <Input id="min-age" type="number" value={minAge} onChange={(e) => setMinAge(e.target.value)} placeholder="18" className="mt-1.5" disabled={isLoadingSettings} />
+                                <Input
+                                    id="min-age"
+                                    type="number"
+                                    value={settings.filters.minAge}
+                                    onChange={(e) => updateFilters({ minAge: parseInt(e.target.value) || 18 })}
+                                    placeholder="18"
+                                    className="mt-1.5"
+                                    disabled={isLoadingSettings}
+                                />
                             </div>
                         </div>
                     </div>
@@ -649,19 +634,23 @@ export default function Settings() {
                                 <Label>Notify me when...</Label>
                                 <div className="mt-2 space-y-2">
                                     <div className="flex items-center gap-3">
-                                        <Switch checked={notifyQualified} onCheckedChange={setNotifyQualified} disabled={isLoadingSettings} />
+                                        <Switch checked={settings.notifications.notifyQualified} onCheckedChange={(v) => updateNotifications({ notifyQualified: v })} disabled={isLoadingSettings} />
                                         <span className="text-sm">New qualified lead</span>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <Switch checked={notifyCallBooked} onCheckedChange={setNotifyCallBooked} disabled={isLoadingSettings} />
+                                        <Switch checked={settings.notifications.notifyCallBooked} onCheckedChange={(v) => updateNotifications({ notifyCallBooked: v })} disabled={isLoadingSettings} />
                                         <span className="text-sm">New call booked</span>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <Switch checked={notifyNeedsReview} onCheckedChange={setNotifyNeedsReview} disabled={isLoadingSettings} />
+                                        <Switch
+                                            checked={settings.notifications.notifyNeedsReview}
+                                            onCheckedChange={(v) => updateNotifications({ notifyNeedsReview: v })}
+                                            disabled={isLoadingSettings}
+                                        />
                                         <span className="text-sm">AI needs review</span>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <Switch checked={notifyWhenFlag} onCheckedChange={setNotifyWhenFlag} disabled={isLoadingSettings} />
+                                        <Switch checked={settings.notifications.notifyWhenFlag} onCheckedChange={(v) => updateNotifications({ notifyWhenFlag: v })} disabled={isLoadingSettings} />
                                         <span className="text-sm">Conversation flagged</span>
                                     </div>
                                 </div>
@@ -669,7 +658,11 @@ export default function Settings() {
 
                             <div>
                                 <Label>Digest Frequency</Label>
-                                <Select value={digestFrequency} onValueChange={(v) => setDigestFrequency(v as WorkspaceSettings["notifications"]["digestFrequency"])} disabled={isLoadingSettings}>
+                                <Select
+                                    value={settings.notifications.digestFrequency}
+                                    onValueChange={(v) => updateNotifications({ digestFrequency: v as WorkspaceSettings["notifications"]["digestFrequency"] })}
+                                    disabled={isLoadingSettings}
+                                >
                                     <SelectTrigger className="mt-1.5 w-full sm:w-64">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -788,7 +781,8 @@ export default function Settings() {
                                                                     {member.name
                                                                         .split(" ")
                                                                         .map((n) => n[0])
-                                                                        .join("")}
+                                                                        .join("")
+                                                                        .toUpperCase()}
                                                                 </AvatarFallback>
                                                             </Avatar>
                                                             <div className="min-w-0">
@@ -798,7 +792,7 @@ export default function Settings() {
                                                         </div>
                                                     </td>
                                                     <td className="py-3 hidden sm:table-cell">
-                                                        <span className="text-sm text-muted-foreground">It's me</span>
+                                                        <span className="text-sm text-muted-foreground">Owner</span>
                                                     </td>
                                                     <td className="py-3 text-right">
                                                         <Button variant="ghost" size="sm" className="text-primary">
@@ -839,7 +833,8 @@ export default function Settings() {
                                                                         {member.name
                                                                             .split(" ")
                                                                             .map((n) => n[0])
-                                                                            .join("")}
+                                                                            .join("")
+                                                                            .toUpperCase()}
                                                                     </AvatarFallback>
                                                                 </Avatar>
                                                                 <div className="min-w-0">

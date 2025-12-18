@@ -656,9 +656,7 @@ export default function Prompt() {
                         addToExisting: payload.config?.addToExisting ?? prev.addToExisting,
                         coachingDetails: payload.config?.coachingDetails || prev.coachingDetails,
                         styleNotes: payload.config?.styleNotes || prev.styleNotes,
-                        objectionHandlers: payload.config?.objectionHandlers?.length 
-                            ? payload.config.objectionHandlers 
-                            : [{ id: crypto.randomUUID(), objection: "", response: "" }],
+                        objectionHandlers: payload.config?.objectionHandlers?.length ? payload.config.objectionHandlers : [{ id: crypto.randomUUID(), objection: "", response: "" }],
                         sequences: {
                             lead: payload.config?.sequences?.lead || DEFAULT_SEQUENCES.lead,
                             qualification: payload.config?.sequences?.qualification || DEFAULT_SEQUENCES.qualification,
