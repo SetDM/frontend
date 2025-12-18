@@ -1,6 +1,6 @@
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useBlocker } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Instagram, User, Bot, Link2, Clock, AlertTriangle, MessageSquare, Ban, Target, Timer, Save, Users, Copy, Check, UserPlus, Trash2, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
@@ -93,6 +93,10 @@ export default function Settings() {
 
     // Store all settings in a single state object
     const [settings, setSettings] = useState<WorkspaceSettings>(DEFAULT_SETTINGS);
+    
+    // Track original settings to detect unsaved changes
+    const originalSettingsRef = useRef<string>("");
+    const hasUnsavedChanges = originalSettingsRef.current !== "" && originalSettingsRef.current !== JSON.stringify(settings);
 
     // Autopilot confirmation dialog
     const [showAutopilotConfirm, setShowAutopilotConfirm] = useState(false);
@@ -335,15 +339,18 @@ export default function Settings() {
                 }
 
                 if (payload?.data) {
-                    setSettings((prev) => ({
-                        profile: { ...prev.profile, ...payload.data.profile },
-                        autopilot: { ...prev.autopilot, ...payload.data.autopilot },
-                        entryPoints: { ...prev.entryPoints, ...payload.data.entryPoints },
-                        ignoreRules: { ...prev.ignoreRules, ...payload.data.ignoreRules },
-                        filters: { ...prev.filters, ...payload.data.filters },
-                        notifications: { ...prev.notifications, ...payload.data.notifications },
-                        team: { ...prev.team, ...payload.data.team },
-                    }));
+                    const newSettings = {
+                        profile: { ...DEFAULT_SETTINGS.profile, ...payload.data.profile },
+                        autopilot: { ...DEFAULT_SETTINGS.autopilot, ...payload.data.autopilot },
+                        entryPoints: { ...DEFAULT_SETTINGS.entryPoints, ...payload.data.entryPoints },
+                        ignoreRules: { ...DEFAULT_SETTINGS.ignoreRules, ...payload.data.ignoreRules },
+                        filters: { ...DEFAULT_SETTINGS.filters, ...payload.data.filters },
+                        notifications: { ...DEFAULT_SETTINGS.notifications, ...payload.data.notifications },
+                        team: { ...DEFAULT_SETTINGS.team, ...payload.data.team },
+                    };
+                    setSettings(newSettings);
+                    // Store original settings for change detection
+                    originalSettingsRef.current = JSON.stringify(newSettings);
                 }
             } catch (error) {
                 if (signal?.aborted) return;
@@ -389,15 +396,18 @@ export default function Settings() {
             }
 
             if (payload?.data) {
-                setSettings((prev) => ({
-                    profile: { ...prev.profile, ...payload.data.profile },
-                    autopilot: { ...prev.autopilot, ...payload.data.autopilot },
-                    entryPoints: { ...prev.entryPoints, ...payload.data.entryPoints },
-                    ignoreRules: { ...prev.ignoreRules, ...payload.data.ignoreRules },
-                    filters: { ...prev.filters, ...payload.data.filters },
-                    notifications: { ...prev.notifications, ...payload.data.notifications },
-                    team: { ...prev.team, ...payload.data.team },
-                }));
+                const savedSettings = {
+                    profile: { ...settings.profile, ...payload.data.profile },
+                    autopilot: { ...settings.autopilot, ...payload.data.autopilot },
+                    entryPoints: { ...settings.entryPoints, ...payload.data.entryPoints },
+                    ignoreRules: { ...settings.ignoreRules, ...payload.data.ignoreRules },
+                    filters: { ...settings.filters, ...payload.data.filters },
+                    notifications: { ...settings.notifications, ...payload.data.notifications },
+                    team: { ...settings.team, ...payload.data.team },
+                };
+                setSettings(savedSettings);
+                // Update original settings after successful save
+                originalSettingsRef.current = JSON.stringify(savedSettings);
             }
 
             toast.success("Settings saved successfully!");
@@ -478,6 +488,22 @@ export default function Settings() {
     useEffect(() => {
         setIgnorePatternsText(arrayToText(settings.ignoreRules.ignorePatterns));
     }, [settings.ignoreRules.ignorePatterns]);
+
+    // Block navigation when there are unsaved changes
+    const blocker = useBlocker(hasUnsavedChanges);
+
+    // Handle browser refresh/close with unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges]);
 
     return (
         <AppLayout>
@@ -1036,6 +1062,36 @@ export default function Settings() {
                             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
                             <AlertDialogAction onClick={removeMember} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                                 {isDeleting ? "Removing..." : "Remove"}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Unsaved Changes Dialog */}
+                <AlertDialog open={blocker.state === "blocked"}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                You have unsaved changes. Do you want to save before leaving?
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => blocker.reset?.()}>Cancel</AlertDialogCancel>
+                            <Button
+                                variant="outline"
+                                onClick={() => blocker.proceed?.()}
+                            >
+                                Discard Changes
+                            </Button>
+                            <AlertDialogAction
+                                onClick={async () => {
+                                    await handleSave();
+                                    blocker.proceed?.();
+                                }}
+                                disabled={isSaving}
+                            >
+                                {isSaving ? "Saving..." : "Save & Leave"}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

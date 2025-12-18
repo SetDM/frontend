@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useBlocker } from "react-router-dom";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Send, Plus, Sparkles, ChevronLeft, ChevronDown, ChevronUp, Link2, GripVertical, X, MessageSquare, Zap, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -592,6 +594,10 @@ export default function Prompt() {
     const [isSaving, setIsSaving] = useState(false);
     const [promptError, setPromptError] = useState<string | null>(null);
 
+    // Track original config to detect unsaved changes
+    const originalConfigRef = useRef<string>("");
+    const hasUnsavedChanges = originalConfigRef.current !== "" && originalConfigRef.current !== JSON.stringify(config);
+
     // Mobile: Whether to show the test chat panel
     const [showPreview, setShowPreview] = useState(false);
 
@@ -650,12 +656,12 @@ export default function Prompt() {
                 }
 
                 if (payload.config) {
-                    setConfig((prev) => ({
-                        ...prev,
-                        coachName: payload.config?.coachName || prev.coachName,
-                        addToExisting: payload.config?.addToExisting ?? prev.addToExisting,
-                        coachingDetails: payload.config?.coachingDetails || prev.coachingDetails,
-                        styleNotes: payload.config?.styleNotes || prev.styleNotes,
+                    const loadedConfig: PromptConfig = {
+                        ...DEFAULT_CONFIG,
+                        coachName: payload.config?.coachName || DEFAULT_CONFIG.coachName,
+                        addToExisting: payload.config?.addToExisting ?? DEFAULT_CONFIG.addToExisting,
+                        coachingDetails: payload.config?.coachingDetails || DEFAULT_CONFIG.coachingDetails,
+                        styleNotes: payload.config?.styleNotes || DEFAULT_CONFIG.styleNotes,
                         objectionHandlers: payload.config?.objectionHandlers?.length ? payload.config.objectionHandlers : [{ id: crypto.randomUUID(), objection: "", response: "" }],
                         sequences: {
                             lead: payload.config?.sequences?.lead || DEFAULT_SEQUENCES.lead,
@@ -665,7 +671,10 @@ export default function Prompt() {
                             vslLink: payload.config?.sequences?.vslLink || DEFAULT_SEQUENCES.vslLink,
                         },
                         keywordSequence: payload.config?.keywordSequence || DEFAULT_KEYWORD_SEQUENCE,
-                    }));
+                    };
+                    setConfig(loadedConfig);
+                    // Store original config for change detection
+                    originalConfigRef.current = JSON.stringify(loadedConfig);
                 }
             } catch (error) {
                 if (signal?.aborted) {
@@ -719,6 +728,9 @@ export default function Prompt() {
                 const message = (payload && typeof payload === "object" && "message" in payload ? (payload as { message?: string }).message : null) || "Failed to save prompt.";
                 throw new Error(message);
             }
+
+            // Update original config after successful save
+            originalConfigRef.current = JSON.stringify(config);
 
             toast.success("Configuration saved!", {
                 position: "top-right",
@@ -844,6 +856,26 @@ export default function Prompt() {
             },
         }));
     };
+
+    // -------------------------------------------------------------------------
+    // UNSAVED CHANGES PROTECTION
+    // -------------------------------------------------------------------------
+
+    // Block navigation when there are unsaved changes
+    const blocker = useBlocker(hasUnsavedChanges);
+
+    // Handle browser refresh/close with unsaved changes
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges]);
 
     // -------------------------------------------------------------------------
     // RENDER
@@ -1262,6 +1294,36 @@ export default function Prompt() {
                     </div>
                 </div>
             </div>
+
+            {/* Unsaved Changes Dialog */}
+            <AlertDialog open={blocker.state === "blocked"}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            You have unsaved changes. Do you want to save before leaving?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => blocker.reset?.()}>Cancel</AlertDialogCancel>
+                        <Button
+                            variant="outline"
+                            onClick={() => blocker.proceed?.()}
+                        >
+                            Discard Changes
+                        </Button>
+                        <AlertDialogAction
+                            onClick={async () => {
+                                await handleSave();
+                                blocker.proceed?.();
+                            }}
+                            disabled={isSaving}
+                        >
+                            {isSaving ? "Saving..." : "Save & Leave"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }
