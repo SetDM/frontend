@@ -39,6 +39,9 @@ export const FOLLOWER_ADMIN_ENDPOINTS = {
     enrich: (instagramId: string) => `${API_BASE_URL}/admin/followers/${instagramId}/enrich`,
 };
 
+// Netlify function for sending emails (Gmail via nodemailer)
+export const EMAIL_FUNCTION_URL = "/api/send-email";
+
 export const TEAM_ENDPOINTS = {
     // Invites
     createInvite: `${API_BASE_URL}/team/invites`,

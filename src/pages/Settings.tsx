@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
-import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS, TEAM_ENDPOINTS } from "@/lib/config";
+import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS, TEAM_ENDPOINTS, EMAIL_FUNCTION_URL } from "@/lib/config";
 import type { WorkspaceSettings, TeamMember } from "@/types";
 
 type TeamRole = "admin" | "editor" | "viewer";
@@ -183,6 +183,7 @@ export default function Settings() {
 
         setIsCreatingInvite(true);
         try {
+            // 1. Create invite in backend
             const response = await authorizedFetch(TEAM_ENDPOINTS.createInvite, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -196,9 +197,32 @@ export default function Settings() {
             }
 
             setInviteLink(data.data.inviteUrl);
-            setInviteEmailSent(data.data.emailSent || false);
 
-            if (data.data.emailSent) {
+            // 2. Send email via Netlify function (Gmail)
+            let emailSent = false;
+            try {
+                const emailResponse = await fetch(EMAIL_FUNCTION_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        type: "invite",
+                        to: inviteEmail.trim(),
+                        inviterName: user?.username || "The workspace owner",
+                        workspaceName: user?.username ? `@${user.username}` : "SetDM Workspace",
+                        role: selectedRole,
+                        inviteUrl: data.data.inviteUrl,
+                    }),
+                });
+
+                const emailResult = await emailResponse.json();
+                emailSent = emailResult.sent === true;
+            } catch (emailError) {
+                console.error("Failed to send email:", emailError);
+            }
+
+            setInviteEmailSent(emailSent);
+
+            if (emailSent) {
                 toast.success(`Invite email sent to ${inviteEmail}`);
             } else {
                 toast.success(`Invite created for ${inviteEmail}. Share the link below.`);
