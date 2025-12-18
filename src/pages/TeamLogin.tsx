@@ -105,18 +105,16 @@ export default function TeamLogin() {
                 return;
             }
 
-            // If we got a login URL back, send the email via Netlify function
-            if (data.data?.loginUrl) {
+            // If we got a login URL back, send the email via Netlify function with signed payload
+            if (data.data?.emailPayload) {
                 try {
                     await fetch(EMAIL_FUNCTION_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            type: "magic-link",
-                            to: data.data.email,
-                            name: data.data.name,
-                            loginUrl: data.data.loginUrl,
-                            workspaceName: "SetDM",
+                            ...data.data.emailPayload,
+                            signature: data.data.emailSignature,
+                            timestamp: data.data.emailTimestamp,
                         }),
                     });
                 } catch (emailErr) {
@@ -154,18 +152,16 @@ export default function TeamLogin() {
                 throw new Error(data.message || "Failed to request login link.");
             }
 
-            // Send the email via Netlify function
-            if (data.data?.loginUrl) {
+            // Send the email via Netlify function with signed payload
+            if (data.data?.emailPayload) {
                 try {
                     await fetch(EMAIL_FUNCTION_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            type: "magic-link",
-                            to: data.data.email,
-                            name: data.data.name,
-                            loginUrl: data.data.loginUrl,
-                            workspaceName: "SetDM",
+                            ...data.data.emailPayload,
+                            signature: data.data.emailSignature,
+                            timestamp: data.data.emailTimestamp,
                         }),
                     });
                 } catch (emailErr) {

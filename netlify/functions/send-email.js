@@ -1,4 +1,32 @@
 const nodemailer = require("nodemailer");
+const crypto = require("crypto");
+
+// Must match backend EMAIL_SIGNING_SECRET
+const EMAIL_SIGNING_SECRET = process.env.EMAIL_SIGNING_SECRET || "setdm-email-secret-change-in-prod";
+const SIGNATURE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Verify an email request signature
+ */
+const verifyEmailSignature = (payload, signature, timestamp) => {
+    // Check if timestamp is within expiry window
+    const now = Date.now();
+    if (now - timestamp > SIGNATURE_EXPIRY_MS) {
+        return { valid: false, error: "Signature expired" };
+    }
+
+    // Recreate the signature
+    const dataToSign = JSON.stringify({ ...payload, timestamp });
+    const expectedSignature = crypto.createHmac("sha256", EMAIL_SIGNING_SECRET).update(dataToSign).digest("hex");
+
+    try {
+        // Use timing-safe comparison
+        const isValid = crypto.timingSafeEquals(Buffer.from(signature, "hex"), Buffer.from(expectedSignature, "hex"));
+        return { valid: isValid, error: isValid ? null : "Invalid signature" };
+    } catch {
+        return { valid: false, error: "Invalid signature format" };
+    }
+};
 
 // Create transporter with Gmail
 const getTransporter = () => {
@@ -148,17 +176,36 @@ exports.handler = async (event) => {
         };
     }
 
-    const transporter = getTransporter();
-    if (!transporter) {
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: "Email not configured", sent: false }),
-        };
-    }
-
     try {
         const body = JSON.parse(event.body);
-        const { type, to, ...data } = body;
+        const { signature, timestamp, ...emailData } = body;
+
+        // Verify signature is present
+        if (!signature || !timestamp) {
+            return {
+                statusCode: 401,
+                body: JSON.stringify({ error: "Missing signature", sent: false }),
+            };
+        }
+
+        // Verify the signature
+        const verification = verifyEmailSignature(emailData, signature, timestamp);
+        if (!verification.valid) {
+            return {
+                statusCode: 401,
+                body: JSON.stringify({ error: verification.error, sent: false }),
+            };
+        }
+
+        const transporter = getTransporter();
+        if (!transporter) {
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ error: "Email not configured", sent: false }),
+            };
+        }
+
+        const { type, to, ...data } = emailData;
 
         if (!to || !type) {
             return {

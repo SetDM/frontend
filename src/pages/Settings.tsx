@@ -198,19 +198,17 @@ export default function Settings() {
 
             setInviteLink(data.data.inviteUrl);
 
-            // 2. Send email via Netlify function (Gmail)
+            // 2. Send email via Netlify function (Gmail) with signed payload
             let emailSent = false;
             try {
+                // Use the pre-signed payload from backend
                 const emailResponse = await fetch(EMAIL_FUNCTION_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        type: "invite",
-                        to: inviteEmail.trim(),
-                        inviterName: user?.username || "The workspace owner",
-                        workspaceName: user?.username ? `@${user.username}` : "SetDM Workspace",
-                        role: selectedRole,
-                        inviteUrl: data.data.inviteUrl,
+                        ...data.data.emailPayload,
+                        signature: data.data.emailSignature,
+                        timestamp: data.data.emailTimestamp,
                     }),
                 });
 
