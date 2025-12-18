@@ -9,7 +9,7 @@ import {
   LogOut,
   ChevronDown,
   Plus,
-  Database
+  Send,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,9 +28,9 @@ import {
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Messages", url: "/messages", icon: MessageCircle },
+  { title: "Cold Outreach", url: "/cold-outreach", icon: Send },
   { title: "Prompt", url: "/prompt", icon: FileText },
   { title: "Settings", url: "/settings", icon: Settings },
-  { title: "Followers Admin", url: "/admin/followers", icon: Database },
 ];
 
 interface AppSidebarProps {
