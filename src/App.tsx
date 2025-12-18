@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import AuthSuccess from "./pages/AuthSuccess";
 import AuthError from "./pages/AuthError";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ const App = () => (
                         <Route path="/login" element={<Login />} />
                         <Route path="/auth/success" element={<AuthSuccess />} />
                         <Route path="/auth/error" element={<AuthError />} />
+                        <Route path="/privacy" element={<PrivacyPolicy />} />
                         <Route element={<ProtectedRoute />}>
                             <Route path="/" element={<Dashboard />} />
                             <Route path="/messages" element={<Messages />} />

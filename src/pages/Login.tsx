@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -105,6 +105,13 @@ export default function Login() {
             Open this page in your mobile browser to enable Instagram authentication.
           </p>
         )}
+
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          By continuing, you agree to our{" "}
+          <Link to="/privacy" className="text-primary hover:underline">
+            Privacy Policy
+          </Link>
+        </p>
       </div>
     </div>
   );
