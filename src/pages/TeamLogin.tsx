@@ -235,9 +235,7 @@ export default function TeamLogin() {
                             <Mail className="h-8 w-8 text-green-500" />
                         </div>
                         <h2 className="mb-2 text-xl font-semibold text-foreground">Check your email!</h2>
-                        <p className="mb-6 text-muted-foreground">
-                            If an account exists with that email, we've sent you a login link. It expires in 15 minutes.
-                        </p>
+                        <p className="mb-6 text-muted-foreground">If an account exists with that email, we've sent you a login link. It expires in 15 minutes.</p>
                         <Button variant="outline" onClick={() => setRequestSent(false)}>
                             Send Another
                         </Button>
@@ -278,23 +276,10 @@ export default function TeamLogin() {
                         <form onSubmit={handleRequestLogin} className="space-y-4">
                             <div>
                                 <Label htmlFor="email">Email</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="your@email.com"
-                                    className="mt-1.5"
-                                    required
-                                    autoFocus
-                                />
+                                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" className="mt-1.5" required autoFocus />
                             </div>
 
-                            {requestError && (
-                                <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-                                    {requestError}
-                                </div>
-                            )}
+                            {requestError && <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">{requestError}</div>}
 
                             <Button type="submit" className="w-full" size="lg" disabled={isRequesting || !email.trim()}>
                                 {isRequesting ? (

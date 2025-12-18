@@ -24,6 +24,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { isTeamMember } from "@/types";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -41,14 +42,29 @@ export function AppSidebar({ className }: AppSidebarProps) {
   const { user, workspaces, activeWorkspaceId, switchWorkspace, redirectToLogin, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const initials = user?.username
-    ? user.username
+  // Get display info based on user type
+  const isTeamMemberUser = isTeamMember(user);
+  const displayName = isTeamMemberUser
+    ? (user.workspaceUsername ? `@${user.workspaceUsername}` : user.name)
+    : (user?.username || "Select workspace");
+  const displaySubtitle = isTeamMemberUser
+    ? `${user.name} • ${user.role}`
+    : (user?.accountType || "Instagram");
+
+  const initials = isTeamMemberUser
+    ? (user.workspaceUsername || user.name || "TM")
+        .split(/[\s@]+/)
+        .filter(Boolean)
+        .map((part) => part[0])
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : (user?.username || "--")
         .split(" ")
         .map((name) => name[0])
         .join("")
         .slice(0, 2)
-        .toUpperCase()
-    : "--";
+        .toUpperCase();
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -85,11 +101,11 @@ export function AppSidebar({ className }: AppSidebarProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 text-left">
-                <div className="font-medium text-foreground">
-                  {user?.username || "Select workspace"}
+                <div className="font-medium text-foreground truncate">
+                  {displayName}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {user?.accountType || "Instagram"}
+                <div className="text-xs text-muted-foreground truncate capitalize">
+                  {displaySubtitle}
                 </div>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -104,20 +120,29 @@ export function AppSidebar({ className }: AppSidebarProps) {
                   void switchWorkspace(value);
                 }}
               >
-                {workspaces.map((workspace) => (
-                  <DropdownMenuRadioItem
-                    key={workspace.instagramId}
-                    value={workspace.instagramId}
-                    className="flex flex-col items-start gap-0.5 py-2"
-                  >
-                    <span className="text-sm font-medium text-foreground">
-                      {workspace.username}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      @{workspace.instagramId}
-                    </span>
-                  </DropdownMenuRadioItem>
-                ))}
+                {workspaces.map((workspace) => {
+                  const wsIsTeamMember = workspace.isTeamMember === true;
+                  const wsDisplayName = wsIsTeamMember
+                    ? (workspace.workspaceUsername ? `@${workspace.workspaceUsername}` : workspace.name || "Workspace")
+                    : (workspace.username || "Workspace");
+                  const wsSubtitle = wsIsTeamMember
+                    ? `${workspace.name || workspace.email} • ${workspace.role}`
+                    : `@${workspace.instagramId}`;
+                  return (
+                    <DropdownMenuRadioItem
+                      key={workspace.instagramId}
+                      value={workspace.instagramId}
+                      className="flex flex-col items-start gap-0.5 py-2"
+                    >
+                      <span className="text-sm font-medium text-foreground">
+                        {wsDisplayName}
+                      </span>
+                      <span className="text-xs text-muted-foreground capitalize">
+                        {wsSubtitle}
+                      </span>
+                    </DropdownMenuRadioItem>
+                  );
+                })}
               </DropdownMenuRadioGroup>
             ) : (
               <div className="px-2 py-1.5 text-sm text-muted-foreground">

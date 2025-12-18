@@ -144,8 +144,7 @@ export default function AcceptInvite() {
                             </div>
                             <h2 className="mb-2 text-xl font-semibold text-foreground">You're Invited!</h2>
                             <p className="text-sm text-muted-foreground">
-                                You've been invited to join as {inviteData.role === "admin" ? "an" : "a"}{" "}
-                                <span className="font-medium capitalize">{inviteData.role}</span>
+                                You've been invited to join as {inviteData.role === "admin" ? "an" : "a"} <span className="font-medium capitalize">{inviteData.role}</span>
                             </p>
                         </div>
 
@@ -157,16 +156,7 @@ export default function AcceptInvite() {
 
                             <div>
                                 <Label htmlFor="name">Your Name</Label>
-                                <Input
-                                    id="name"
-                                    type="text"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    placeholder="Enter your name"
-                                    className="mt-1.5"
-                                    required
-                                    autoFocus
-                                />
+                                <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" className="mt-1.5" required autoFocus />
                             </div>
 
                             <Button type="submit" className="w-full" size="lg" disabled={isAccepting || !name.trim()}>

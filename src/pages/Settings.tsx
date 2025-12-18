@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS, TEAM_ENDPOINTS, EMAIL_FUNCTION_URL } from "@/lib/config";
 import type { WorkspaceSettings, TeamMember } from "@/types";
 
@@ -84,6 +85,7 @@ export default function Settings() {
     usePageTitle("Settings");
     const navigate = useNavigate();
     const { user, authorizedFetch, logout, redirectToLogin, activeWorkspaceId } = useAuth();
+    const { canEditSettings, canManageTeam, isViewer } = usePermissions();
 
     const [isLoadingSettings, setIsLoadingSettings] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -452,6 +454,12 @@ export default function Settings() {
 
                 {isLoadingSettings && <div className="mb-6 rounded-lg border border-dashed border-border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">Loading workspace settings...</div>}
 
+                {isViewer && (
+                    <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                        <strong>View only:</strong> You have viewer access to this workspace. Contact an admin to request edit permissions.
+                    </div>
+                )}
+
                 <div className="space-y-4 sm:space-y-6">
                     {/* Account & Instagram Connection */}
                     <div className="rounded-lg bg-card p-4 sm:p-6 shadow-card">
@@ -770,7 +778,8 @@ export default function Settings() {
                         </div>
                     </div>
 
-                    {/* Team Members */}
+                    {/* Team Members - only show for admins/owners */}
+                    {canManageTeam && (
                     <div className="rounded-lg bg-card p-4 sm:p-6 shadow-card">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 sm:mb-6">
                             <div className="flex items-start gap-3">
@@ -946,13 +955,16 @@ export default function Settings() {
                             </>
                         )}
                     </div>
+                    )}
                 </div>
 
-                {/* FAB Save Button */}
-                <Button onClick={handleSave} size="lg" className="fixed bottom-6 right-6 px-6 rounded-full shadow-lg hover:shadow-xl transition-shadow z-50" disabled={isSaving || isLoadingSettings}>
-                    <Save className="h-5 w-5 mr-2" />
-                    {isSaving ? "Saving…" : "Save Settings"}
-                </Button>
+                {/* FAB Save Button - only show if user can edit settings */}
+                {canEditSettings && (
+                    <Button onClick={handleSave} size="lg" className="fixed bottom-6 right-6 px-6 rounded-full shadow-lg hover:shadow-xl transition-shadow z-50" disabled={isSaving || isLoadingSettings}>
+                        <Save className="h-5 w-5 mr-2" />
+                        {isSaving ? "Saving…" : "Save Settings"}
+                    </Button>
+                )}
 
                 {/* Autopilot Confirmation Dialog */}
                 <AlertDialog open={showAutopilotConfirm} onOpenChange={setShowAutopilotConfirm}>
