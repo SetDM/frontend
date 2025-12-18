@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useUnsavedChanges } from "@/context/UnsavedChangesContext";
 import { AUTH_ENDPOINTS, SETTINGS_ENDPOINTS, TEAM_ENDPOINTS, EMAIL_FUNCTION_URL } from "@/lib/config";
 import type { WorkspaceSettings, TeamMember } from "@/types";
 
@@ -97,6 +98,9 @@ export default function Settings() {
     // Track original settings to detect unsaved changes
     const originalSettingsRef = useRef<string>("");
     const hasUnsavedChanges = originalSettingsRef.current !== "" && originalSettingsRef.current !== JSON.stringify(settings);
+
+    // Sync unsaved changes state with context
+    const { setHasUnsavedChanges, setOnSave } = useUnsavedChanges();
 
     // Autopilot confirmation dialog
     const [showAutopilotConfirm, setShowAutopilotConfirm] = useState(false);
@@ -379,7 +383,7 @@ export default function Settings() {
         return () => abortController.abort();
     }, [activeWorkspaceId, loadSettings]);
 
-    const handleSave = async () => {
+    const handleSave = useCallback(async () => {
         setIsSaving(true);
         try {
             const response = await authorizedFetch(SETTINGS_ENDPOINTS.workspace, {
@@ -417,7 +421,7 @@ export default function Settings() {
         } finally {
             setIsSaving(false);
         }
-    };
+    }, [authorizedFetch, settings]);
 
     const handleConnectInstagram = () => {
         redirectToLogin();
@@ -501,6 +505,17 @@ export default function Settings() {
         window.addEventListener("beforeunload", handleBeforeUnload);
         return () => window.removeEventListener("beforeunload", handleBeforeUnload);
     }, [hasUnsavedChanges]);
+
+    // Sync unsaved changes state with context for in-app navigation blocking
+    useEffect(() => {
+        setHasUnsavedChanges(hasUnsavedChanges);
+    }, [hasUnsavedChanges, setHasUnsavedChanges]);
+
+    // Register save function with context
+    useEffect(() => {
+        setOnSave(handleSave);
+        return () => setOnSave(null);
+    }, [setOnSave, handleSave]);
 
     return (
         <AppLayout>

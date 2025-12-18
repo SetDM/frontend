@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
+import { useUnsavedChanges } from "@/context/UnsavedChangesContext";
 import { PROMPT_ENDPOINTS } from "@/lib/config";
 import { StageBadge } from "@/components/StageBadge";
 import type { FunnelStage } from "@/types";
@@ -596,6 +597,9 @@ export default function Prompt() {
     const originalConfigRef = useRef<string>("");
     const hasUnsavedChanges = originalConfigRef.current !== "" && originalConfigRef.current !== JSON.stringify(config);
 
+    // Sync unsaved changes state with context
+    const { setHasUnsavedChanges, setOnSave } = useUnsavedChanges();
+
     // Mobile: Whether to show the test chat panel
     const [showPreview, setShowPreview] = useState(false);
 
@@ -710,7 +714,7 @@ export default function Prompt() {
     // EVENT HANDLERS
     // -------------------------------------------------------------------------
 
-    const handleSave = async () => {
+    const handleSave = useCallback(async () => {
         setIsSaving(true);
         try {
             const response = await authorizedFetch(PROMPT_ENDPOINTS.user, {
@@ -739,7 +743,7 @@ export default function Prompt() {
         } finally {
             setIsSaving(false);
         }
-    };
+    }, [authorizedFetch, config]);
 
     const buildHistoryPayload = useCallback(
         (messages: TestMessage[]) =>
@@ -871,6 +875,17 @@ export default function Prompt() {
         window.addEventListener("beforeunload", handleBeforeUnload);
         return () => window.removeEventListener("beforeunload", handleBeforeUnload);
     }, [hasUnsavedChanges]);
+
+    // Sync unsaved changes state with context for in-app navigation blocking
+    useEffect(() => {
+        setHasUnsavedChanges(hasUnsavedChanges);
+    }, [hasUnsavedChanges, setHasUnsavedChanges]);
+
+    // Register save function with context
+    useEffect(() => {
+        setOnSave(handleSave);
+        return () => setOnSave(null);
+    }, [setOnSave, handleSave]);
 
     // -------------------------------------------------------------------------
     // RENDER

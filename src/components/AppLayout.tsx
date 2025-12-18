@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Menu } from "lucide-react";
 
 import { AppSidebar } from "./AppSidebar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useUnsavedChanges } from "@/context/UnsavedChangesContext";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -15,11 +17,42 @@ interface AppLayoutProps {
 export function AppLayout({ children, hideMobileHeader = false }: AppLayoutProps) {
     const isMobile = useIsMobile();
     const location = useLocation();
+    const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const { pendingNavigation, setPendingNavigation, onSave, setHasUnsavedChanges } = useUnsavedChanges();
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         setIsSidebarOpen(false);
     }, [location.pathname]);
+
+    const handleDiscard = () => {
+        if (pendingNavigation) {
+            setHasUnsavedChanges(false);
+            navigate(pendingNavigation);
+            setPendingNavigation(null);
+        }
+    };
+
+    const handleSaveAndLeave = async () => {
+        if (onSave) {
+            setIsSaving(true);
+            try {
+                await onSave();
+                setHasUnsavedChanges(false);
+                if (pendingNavigation) {
+                    navigate(pendingNavigation);
+                    setPendingNavigation(null);
+                }
+            } finally {
+                setIsSaving(false);
+            }
+        }
+    };
+
+    const handleCancel = () => {
+        setPendingNavigation(null);
+    };
 
     return (
         <div className="flex h-screen w-full bg-background overflow-hidden">
@@ -49,6 +82,25 @@ export function AppLayout({ children, hideMobileHeader = false }: AppLayoutProps
                     </SheetContent>
                 </Sheet>
             ) : null}
+
+            {/* Unsaved Changes Dialog */}
+            <AlertDialog open={pendingNavigation !== null}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+                        <AlertDialogDescription>You have unsaved changes. Do you want to save before leaving?</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
+                        <Button variant="outline" onClick={handleDiscard}>
+                            Discard Changes
+                        </Button>
+                        <AlertDialogAction onClick={handleSaveAndLeave} disabled={isSaving || !onSave}>
+                            {isSaving ? "Saving..." : "Save & Leave"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
