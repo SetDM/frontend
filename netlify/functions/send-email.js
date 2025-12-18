@@ -100,7 +100,7 @@ const getInviteEmailHtml = ({ inviterName, workspaceName, role, inviteUrl }) => 
                     
                     <div style="text-align: center; margin-bottom: 32px;">
                         <a href="${inviteUrl}" 
-                           style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%); color: white; text-decoration: none; font-weight: 600; font-size: 16px; border-radius: 8px;">
+                           style="display: inline-block; padding: 14px 32px; background: #5e7cf4; color: white; text-decoration: none; font-weight: 600; font-size: 16px; border-radius: 8px;">
                             Accept Invite
                         </a>
                     </div>
@@ -159,7 +159,7 @@ const getMagicLinkHtml = ({ name, loginUrl, workspaceName }) => `
                     
                     <div style="text-align: center; margin-bottom: 32px;">
                         <a href="${loginUrl}" 
-                           style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%); color: white; text-decoration: none; font-weight: 600; font-size: 16px; border-radius: 8px;">
+                           style="display: inline-block; padding: 14px 32px; background: #5e7cf4; color: white; text-decoration: none; font-weight: 600; font-size: 16px; border-radius: 8px;">
                             Log In to SetDM
                         </a>
                     </div>
