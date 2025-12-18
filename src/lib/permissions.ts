@@ -15,40 +15,9 @@ export type Permission =
 
 // Define which roles have which permissions
 const ROLE_PERMISSIONS: Record<"admin" | "editor" | "viewer" | "owner", Permission[]> = {
-    owner: [
-        "view:dashboard",
-        "view:messages",
-        "view:prompt",
-        "view:settings",
-        "view:cold-outreach",
-        "edit:messages",
-        "edit:prompt",
-        "edit:settings",
-        "edit:autopilot",
-        "manage:team",
-    ],
-    admin: [
-        "view:dashboard",
-        "view:messages",
-        "view:prompt",
-        "view:settings",
-        "view:cold-outreach",
-        "edit:messages",
-        "edit:prompt",
-        "edit:settings",
-        "edit:autopilot",
-        "manage:team",
-    ],
-    editor: [
-        "view:dashboard",
-        "view:messages",
-        "view:prompt",
-        "view:settings",
-        "view:cold-outreach",
-        "edit:messages",
-        "edit:prompt",
-        "edit:autopilot",
-    ],
+    owner: ["view:dashboard", "view:messages", "view:prompt", "view:settings", "view:cold-outreach", "edit:messages", "edit:prompt", "edit:settings", "edit:autopilot", "manage:team"],
+    admin: ["view:dashboard", "view:messages", "view:prompt", "view:settings", "view:cold-outreach", "edit:messages", "edit:prompt", "edit:settings", "edit:autopilot", "manage:team"],
+    editor: ["view:dashboard", "view:messages", "view:prompt", "view:settings", "view:cold-outreach", "edit:messages", "edit:prompt", "edit:autopilot"],
     viewer: ["view:dashboard", "view:messages", "view:prompt", "view:settings", "view:cold-outreach"],
 };
 

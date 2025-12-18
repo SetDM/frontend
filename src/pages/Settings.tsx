@@ -780,187 +780,192 @@ export default function Settings() {
 
                     {/* Team Members - only show for admins/owners */}
                     {canManageTeam && (
-                    <div className="rounded-lg bg-card p-4 sm:p-6 shadow-card">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 sm:mb-6">
-                            <div className="flex items-start gap-3">
-                                <div className="rounded-lg bg-primary/10 p-2">
-                                    <Users className="h-5 w-5 text-primary" />
+                        <div className="rounded-lg bg-card p-4 sm:p-6 shadow-card">
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 sm:mb-6">
+                                <div className="flex items-start gap-3">
+                                    <div className="rounded-lg bg-primary/10 p-2">
+                                        <Users className="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-foreground">Team Members</h3>
+                                        <p className="text-sm text-muted-foreground">Manage who has access to your account</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-semibold text-foreground">Team Members</h3>
-                                    <p className="text-sm text-muted-foreground">Manage who has access to your account</p>
-                                </div>
-                            </div>
-                            <Dialog
-                                open={inviteDialogOpen}
-                                onOpenChange={(open) => {
-                                    if (!open) closeInviteDialog();
-                                    else setInviteDialogOpen(true);
-                                }}
-                            >
-                                <DialogTrigger asChild>
-                                    <Button className="w-full sm:w-auto gap-2">
-                                        <UserPlus className="h-4 w-4" />
-                                        Invite Member
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent className="sm:max-w-md">
-                                    <DialogHeader>
-                                        <DialogTitle>Invite Team Member</DialogTitle>
-                                        <DialogDescription>Send an invite link to add someone to your team.</DialogDescription>
-                                    </DialogHeader>
+                                <Dialog
+                                    open={inviteDialogOpen}
+                                    onOpenChange={(open) => {
+                                        if (!open) closeInviteDialog();
+                                        else setInviteDialogOpen(true);
+                                    }}
+                                >
+                                    <DialogTrigger asChild>
+                                        <Button className="w-full sm:w-auto gap-2">
+                                            <UserPlus className="h-4 w-4" />
+                                            Invite Member
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-md">
+                                        <DialogHeader>
+                                            <DialogTitle>Invite Team Member</DialogTitle>
+                                            <DialogDescription>Send an invite link to add someone to your team.</DialogDescription>
+                                        </DialogHeader>
 
-                                    {!inviteLink ? (
-                                        <div className="space-y-4 py-4">
-                                            <div>
-                                                <Label htmlFor="invite-email">Email Address</Label>
-                                                <Input
-                                                    id="invite-email"
-                                                    type="email"
-                                                    value={inviteEmail}
-                                                    onChange={(e) => setInviteEmail(e.target.value)}
-                                                    placeholder="teammate@example.com"
-                                                    className="mt-1.5"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <Label className="text-sm font-medium">Role</Label>
-                                                <RadioGroup value={selectedRole} onValueChange={(value) => setSelectedRole(value as TeamRole)} className="mt-2 space-y-2">
-                                                    {(["admin", "editor", "viewer"] as TeamRole[]).map((role) => (
-                                                        <div key={role} className="flex items-start space-x-3">
-                                                            <RadioGroupItem value={role} id={role} className="mt-0.5" />
-                                                            <Label htmlFor={role} className="cursor-pointer font-normal text-sm">
-                                                                <span className="font-medium capitalize">{role}</span>
-                                                                <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[role]}</p>
-                                                            </Label>
-                                                        </div>
-                                                    ))}
-                                                </RadioGroup>
-                                            </div>
-
-                                            <Button onClick={createInvite} className="w-full" disabled={isCreatingInvite || !inviteEmail.trim()}>
-                                                {isCreatingInvite ? (
-                                                    <>
-                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                        Creating...
-                                                    </>
-                                                ) : (
-                                                    "Create Invite Link"
-                                                )}
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4 py-4">
-                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
-                                                <p className="text-sm font-medium text-green-600 dark:text-green-400">{inviteEmailSent ? "✉️ Invite email sent!" : "Invite created!"}</p>
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    {inviteEmailSent
-                                                        ? `We've sent an invite to ${inviteEmail}. The link expires in 24 hours.`
-                                                        : `Share this link with ${inviteEmail}. It expires in 24 hours.`}
-                                                </p>
-                                            </div>
-
-                                            <div>
-                                                {inviteEmailSent && <p className="text-xs text-muted-foreground mb-2">You can also copy the link to share directly:</p>}
-                                                <div className="flex items-center gap-2">
-                                                    <Input value={inviteLink || ""} readOnly className="flex-1 text-sm bg-muted font-mono text-xs" />
-                                                    <Button variant="outline" size="sm" onClick={copyInviteLink} className="gap-1 shrink-0">
-                                                        {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                                                        {linkCopied ? "Copied" : "Copy"}
-                                                    </Button>
-                                                </div>
-                                            </div>
-
-                                            <p className="text-xs text-muted-foreground text-center">When they click the link, they'll set up their account and access the platform.</p>
-
-                                            <Button onClick={closeInviteDialog} className="w-full">
-                                                Done
-                                            </Button>
-                                        </div>
-                                    )}
-                                </DialogContent>
-                            </Dialog>
-                        </div>
-
-                        {isLoadingTeam ? (
-                            <div className="flex items-center justify-center py-8 text-muted-foreground">
-                                <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                Loading team...
-                            </div>
-                        ) : (
-                            <>
-                                {/* Team Members List */}
-                                <div className="space-y-2">
-                                    {teamMembers.map((member) => (
-                                        <div key={member.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar className="h-9 w-9">
-                                                    <AvatarFallback className={member.isOwner ? "bg-primary/10 text-primary" : "bg-muted"}>
-                                                        {(member.name || member.email || "?")
-                                                            .split(" ")
-                                                            .map((n) => n[0])
-                                                            .join("")
-                                                            .toUpperCase()
-                                                            .slice(0, 2)}
-                                                    </AvatarFallback>
-                                                </Avatar>
+                                        {!inviteLink ? (
+                                            <div className="space-y-4 py-4">
                                                 <div>
-                                                    <p className="font-medium text-sm">{member.name || member.email}</p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {member.isOwner ? "Owner" : member.role} {member.email && !member.isOwner && `• ${member.email}`}
+                                                    <Label htmlFor="invite-email">Email Address</Label>
+                                                    <Input
+                                                        id="invite-email"
+                                                        type="email"
+                                                        value={inviteEmail}
+                                                        onChange={(e) => setInviteEmail(e.target.value)}
+                                                        placeholder="teammate@example.com"
+                                                        className="mt-1.5"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <Label className="text-sm font-medium">Role</Label>
+                                                    <RadioGroup value={selectedRole} onValueChange={(value) => setSelectedRole(value as TeamRole)} className="mt-2 space-y-2">
+                                                        {(["admin", "editor", "viewer"] as TeamRole[]).map((role) => (
+                                                            <div key={role} className="flex items-start space-x-3">
+                                                                <RadioGroupItem value={role} id={role} className="mt-0.5" />
+                                                                <Label htmlFor={role} className="cursor-pointer font-normal text-sm">
+                                                                    <span className="font-medium capitalize">{role}</span>
+                                                                    <p className="text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[role]}</p>
+                                                                </Label>
+                                                            </div>
+                                                        ))}
+                                                    </RadioGroup>
+                                                </div>
+
+                                                <Button onClick={createInvite} className="w-full" disabled={isCreatingInvite || !inviteEmail.trim()}>
+                                                    {isCreatingInvite ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                            Creating...
+                                                        </>
+                                                    ) : (
+                                                        "Create Invite Link"
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4 py-4">
+                                                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                                                    <p className="text-sm font-medium text-green-600 dark:text-green-400">{inviteEmailSent ? "✉️ Invite email sent!" : "Invite created!"}</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        {inviteEmailSent
+                                                            ? `We've sent an invite to ${inviteEmail}. The link expires in 24 hours.`
+                                                            : `Share this link with ${inviteEmail}. It expires in 24 hours.`}
                                                     </p>
                                                 </div>
-                                            </div>
-                                            {!member.isOwner && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={() => confirmDeleteMember(member)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
 
-                                {/* Pending Invites */}
-                                {pendingInvites.length > 0 && (
-                                    <div className="mt-6">
-                                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Pending Invites</h4>
-                                        <div className="space-y-2">
-                                            {pendingInvites.map((invite) => (
-                                                <div key={invite.id} className="flex items-center justify-between p-3 rounded-lg border border-dashed border-border bg-muted/30">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
-                                                            <UserPlus className="h-4 w-4 text-muted-foreground" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-medium text-sm">{invite.email}</p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {invite.role} • Expires {new Date(invite.expiresAt).toLocaleDateString()}
-                                                            </p>
-                                                        </div>
+                                                <div>
+                                                    {inviteEmailSent && <p className="text-xs text-muted-foreground mb-2">You can also copy the link to share directly:</p>}
+                                                    <div className="flex items-center gap-2">
+                                                        <Input value={inviteLink || ""} readOnly className="flex-1 text-sm bg-muted font-mono text-xs" />
+                                                        <Button variant="outline" size="sm" onClick={copyInviteLink} className="gap-1 shrink-0">
+                                                            {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                                            {linkCopied ? "Copied" : "Copy"}
+                                                        </Button>
                                                     </div>
-                                                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => cancelInvite(invite.id)}>
-                                                        Cancel
-                                                    </Button>
                                                 </div>
-                                            ))}
-                                        </div>
+
+                                                <p className="text-xs text-muted-foreground text-center">When they click the link, they'll set up their account and access the platform.</p>
+
+                                                <Button onClick={closeInviteDialog} className="w-full">
+                                                    Done
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </DialogContent>
+                                </Dialog>
+                            </div>
+
+                            {isLoadingTeam ? (
+                                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                    Loading team...
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Team Members List */}
+                                    <div className="space-y-2">
+                                        {teamMembers.map((member) => (
+                                            <div key={member.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-9 w-9">
+                                                        <AvatarFallback className={member.isOwner ? "bg-primary/10 text-primary" : "bg-muted"}>
+                                                            {(member.name || member.email || "?")
+                                                                .split(" ")
+                                                                .map((n) => n[0])
+                                                                .join("")
+                                                                .toUpperCase()
+                                                                .slice(0, 2)}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="font-medium text-sm">{member.name || member.email}</p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {member.isOwner ? "Owner" : member.role} {member.email && !member.isOwner && `• ${member.email}`}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {!member.isOwner && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                        onClick={() => confirmDeleteMember(member)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
-                                )}
-                            </>
-                        )}
-                    </div>
+
+                                    {/* Pending Invites */}
+                                    {pendingInvites.length > 0 && (
+                                        <div className="mt-6">
+                                            <h4 className="text-sm font-medium text-muted-foreground mb-2">Pending Invites</h4>
+                                            <div className="space-y-2">
+                                                {pendingInvites.map((invite) => (
+                                                    <div key={invite.id} className="flex items-center justify-between p-3 rounded-lg border border-dashed border-border bg-muted/30">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                                                                <UserPlus className="h-4 w-4 text-muted-foreground" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-sm">{invite.email}</p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    {invite.role} • Expires {new Date(invite.expiresAt).toLocaleDateString()}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => cancelInvite(invite.id)}>
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     )}
                 </div>
 
                 {/* FAB Save Button - only show if user can edit settings */}
                 {canEditSettings && (
-                    <Button onClick={handleSave} size="lg" className="fixed bottom-6 right-6 px-6 rounded-full shadow-lg hover:shadow-xl transition-shadow z-50" disabled={isSaving || isLoadingSettings}>
+                    <Button
+                        onClick={handleSave}
+                        size="lg"
+                        className="fixed bottom-6 right-6 px-6 rounded-full shadow-lg hover:shadow-xl transition-shadow z-50"
+                        disabled={isSaving || isLoadingSettings}
+                    >
                         <Save className="h-5 w-5 mr-2" />
                         {isSaving ? "Saving…" : "Save Settings"}
                     </Button>
