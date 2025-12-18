@@ -16,6 +16,7 @@ import Login from "./pages/Login";
 import AuthSuccess from "./pages/AuthSuccess";
 import AuthError from "./pages/AuthError";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import AcceptInvite from "./pages/AcceptInvite";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ const App = () => (
                         <Route path="/auth/success" element={<AuthSuccess />} />
                         <Route path="/auth/error" element={<AuthError />} />
                         <Route path="/privacy" element={<PrivacyPolicy />} />
+                        <Route path="/invite/:token" element={<AcceptInvite />} />
                         <Route element={<ProtectedRoute />}>
                             <Route path="/" element={<Dashboard />} />
                             <Route path="/messages" element={<Messages />} />
