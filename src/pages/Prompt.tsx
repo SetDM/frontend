@@ -1289,7 +1289,6 @@ export default function Prompt() {
                     </div>
                 </div>
             </div>
-
         </AppLayout>
     );
 }
