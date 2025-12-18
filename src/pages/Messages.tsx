@@ -1469,11 +1469,13 @@ export default function Messages() {
       return;
     }
 
+    // Only clear selection if the currently selected conversation no longer exists
+    // Don't auto-select the first conversation
     setSelectedConversationId((current) => {
       if (current && conversations.some((conversation) => conversation.id === current)) {
         return current;
       }
-      return conversations[0].id;
+      return null;
     });
   }, [conversations]);
 
@@ -1483,11 +1485,13 @@ export default function Messages() {
       return;
     }
 
+    // Only clear selection if the currently selected prospect is no longer in the filtered list
+    // Don't auto-select the first prospect
     setSelectedConversationId((current) => {
       if (current && filteredProspects.some((prospect) => prospect.id === current)) {
         return current;
       }
-      return filteredProspects[0].id;
+      return null;
     });
   }, [filteredProspects]);
 

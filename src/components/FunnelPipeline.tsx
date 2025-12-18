@@ -8,11 +8,11 @@ interface FunnelPipelineProps {
 }
 
 const stages = [
-    { key: "responded" as const, label: "Total Responded", filter: "responded", showBadge: true },
-    { key: "lead" as const, label: "Lead", filter: "lead", showBadge: false },
-    { key: "qualified" as const, label: "Qualified", filter: "qualified", showBadge: false },
-    { key: "callBooked" as const, label: "Call Booked", filter: "call-booked", showBadge: true },
-    { key: "sale" as const, label: "Sales", filter: "sale", showBadge: false },
+    { key: "responded" as const, label: "Total Responded", filter: "responded" },
+    { key: "lead" as const, label: "Lead", filter: "lead" },
+    { key: "qualified" as const, label: "Qualified", filter: "qualified" },
+    { key: "callBooked" as const, label: "Call Booked", filter: "call-booked" },
+    { key: "sale" as const, label: "Sales", filter: "sale" },
 ];
 
 type StageKey = (typeof stages)[number]["key"];
@@ -97,57 +97,57 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
     // Build smooth funnel path that passes through each stage's height
     const buildFunnelPath = () => {
         const h = stageHeightPercents.map((p) => (p / 100) * maxFunnelHeight);
-        
+
         // X positions for center of each stage
         const x = [
-            sectionWidth * 0.5,      // Stage 0 center
-            sectionWidth * 1.5,      // Stage 1 center
-            sectionWidth * 2.5,      // Stage 2 center
-            sectionWidth * 3.5,      // Stage 3 center
-            sectionWidth * 4.5,      // Stage 4 center
+            sectionWidth * 0.5, // Stage 0 center
+            sectionWidth * 1.5, // Stage 1 center
+            sectionWidth * 2.5, // Stage 2 center
+            sectionWidth * 3.5, // Stage 3 center
+            sectionWidth * 4.5, // Stage 4 center
         ];
 
         // Build top edge with smooth curves through each point
         let path = `M 0 ${centerY - h[0] / 2}`;
-        
+
         // Start: flat section at first stage
         path += ` L ${x[0]} ${centerY - h[0] / 2}`;
-        
+
         // Curve from stage 0 to stage 1
         const cp1 = (x[0] + x[1]) / 2;
         path += ` C ${cp1} ${centerY - h[0] / 2}, ${cp1} ${centerY - h[1] / 2}, ${x[1]} ${centerY - h[1] / 2}`;
-        
+
         // Curve from stage 1 to stage 2
         const cp2 = (x[1] + x[2]) / 2;
         path += ` C ${cp2} ${centerY - h[1] / 2}, ${cp2} ${centerY - h[2] / 2}, ${x[2]} ${centerY - h[2] / 2}`;
-        
+
         // Curve from stage 2 to stage 3
         const cp3 = (x[2] + x[3]) / 2;
         path += ` C ${cp3} ${centerY - h[2] / 2}, ${cp3} ${centerY - h[3] / 2}, ${x[3]} ${centerY - h[3] / 2}`;
-        
+
         // Curve from stage 3 to stage 4
         const cp4 = (x[3] + x[4]) / 2;
         path += ` C ${cp4} ${centerY - h[3] / 2}, ${cp4} ${centerY - h[4] / 2}, ${x[4]} ${centerY - h[4] / 2}`;
-        
+
         // End: extend to right edge
         path += ` L ${svgWidth} ${centerY - h[4] / 2}`;
-        
+
         // Bottom edge (right to left)
         path += ` L ${svgWidth} ${centerY + h[4] / 2}`;
         path += ` L ${x[4]} ${centerY + h[4] / 2}`;
-        
+
         // Curve back from stage 4 to stage 3
         path += ` C ${cp4} ${centerY + h[4] / 2}, ${cp4} ${centerY + h[3] / 2}, ${x[3]} ${centerY + h[3] / 2}`;
-        
+
         // Curve back from stage 3 to stage 2
         path += ` C ${cp3} ${centerY + h[3] / 2}, ${cp3} ${centerY + h[2] / 2}, ${x[2]} ${centerY + h[2] / 2}`;
-        
+
         // Curve back from stage 2 to stage 1
         path += ` C ${cp2} ${centerY + h[2] / 2}, ${cp2} ${centerY + h[1] / 2}, ${x[1]} ${centerY + h[1] / 2}`;
-        
+
         // Curve back from stage 1 to stage 0
         path += ` C ${cp1} ${centerY + h[1] / 2}, ${cp1} ${centerY + h[0] / 2}, ${x[0]} ${centerY + h[0] / 2}`;
-        
+
         // Back to start
         path += ` L 0 ${centerY + h[0] / 2}`;
         path += ` Z`;
@@ -159,41 +159,35 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
     const buildHighlightPath = () => {
         const h = stageHeightPercents.map((p) => (p / 100) * maxFunnelHeight);
         const highlightRatio = 0.3;
-        
-        const x = [
-            sectionWidth * 0.5,
-            sectionWidth * 1.5,
-            sectionWidth * 2.5,
-            sectionWidth * 3.5,
-            sectionWidth * 4.5,
-        ];
+
+        const x = [sectionWidth * 0.5, sectionWidth * 1.5, sectionWidth * 2.5, sectionWidth * 3.5, sectionWidth * 4.5];
 
         let path = `M 0 ${centerY - h[0] / 2}`;
         path += ` L ${x[0]} ${centerY - h[0] / 2}`;
-        
+
         const cp1 = (x[0] + x[1]) / 2;
         path += ` C ${cp1} ${centerY - h[0] / 2}, ${cp1} ${centerY - h[1] / 2}, ${x[1]} ${centerY - h[1] / 2}`;
-        
+
         const cp2 = (x[1] + x[2]) / 2;
         path += ` C ${cp2} ${centerY - h[1] / 2}, ${cp2} ${centerY - h[2] / 2}, ${x[2]} ${centerY - h[2] / 2}`;
-        
+
         const cp3 = (x[2] + x[3]) / 2;
         path += ` C ${cp3} ${centerY - h[2] / 2}, ${cp3} ${centerY - h[3] / 2}, ${x[3]} ${centerY - h[3] / 2}`;
-        
+
         const cp4 = (x[3] + x[4]) / 2;
         path += ` C ${cp4} ${centerY - h[3] / 2}, ${cp4} ${centerY - h[4] / 2}, ${x[4]} ${centerY - h[4] / 2}`;
-        
+
         path += ` L ${svgWidth} ${centerY - h[4] / 2}`;
-        
+
         // Bottom of highlight
         path += ` L ${svgWidth} ${centerY - h[4] / 2 + h[4] * highlightRatio}`;
         path += ` L ${x[4]} ${centerY - h[4] / 2 + h[4] * highlightRatio}`;
-        
+
         path += ` C ${cp4} ${centerY - h[4] / 2 + h[4] * highlightRatio}, ${cp4} ${centerY - h[3] / 2 + h[3] * highlightRatio}, ${x[3]} ${centerY - h[3] / 2 + h[3] * highlightRatio}`;
         path += ` C ${cp3} ${centerY - h[3] / 2 + h[3] * highlightRatio}, ${cp3} ${centerY - h[2] / 2 + h[2] * highlightRatio}, ${x[2]} ${centerY - h[2] / 2 + h[2] * highlightRatio}`;
         path += ` C ${cp2} ${centerY - h[2] / 2 + h[2] * highlightRatio}, ${cp2} ${centerY - h[1] / 2 + h[1] * highlightRatio}, ${x[1]} ${centerY - h[1] / 2 + h[1] * highlightRatio}`;
         path += ` C ${cp1} ${centerY - h[1] / 2 + h[1] * highlightRatio}, ${cp1} ${centerY - h[0] / 2 + h[0] * highlightRatio}, ${x[0]} ${centerY - h[0] / 2 + h[0] * highlightRatio}`;
-        
+
         path += ` L 0 ${centerY - h[0] / 2 + h[0] * highlightRatio}`;
         path += ` Z`;
 
@@ -205,24 +199,18 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
             {/* Stage labels, counts, and action buttons */}
             <div className="mb-6 hidden grid-cols-5 gap-2 md:grid">
                 {stages.map((stage) => {
-                    const value = cumulativeValues[stage.key];
+                    // Show actual count for each stage (not cumulative)
+                    const value = stage.key === "responded" ? total : data[stage.key];
                     return (
                         <div key={stage.key} className="flex flex-col items-center text-center">
                             <span className="text-xs font-medium text-muted-foreground mb-1">{stage.label}</span>
                             <span className="text-2xl font-bold text-foreground mb-3">{value}</span>
-                            <div className="relative">
-                                <button
-                                    onClick={() => handleStageClick(stage.filter)}
-                                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-all hover:bg-primary hover:text-primary-foreground hover:scale-105"
-                                >
-                                    <MessageSquare className="h-4 w-4" />
-                                </button>
-                                {stage.showBadge && value > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-pink-500 text-[10px] font-bold text-white">
-                                        !
-                                    </span>
-                                )}
-                            </div>
+                            <button
+                                onClick={() => handleStageClick(stage.filter)}
+                                className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-all hover:bg-primary hover:text-primary-foreground hover:scale-105"
+                            >
+                                <MessageSquare className="h-4 w-4" />
+                            </button>
                         </div>
                     );
                 })}
@@ -243,7 +231,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                     stageColors[stage.key]
                                 )}
                             >
-                                <span className="sr-only">{`${stage.label}: ${cumulativeValues[stage.key]} conversations`}</span>
+                                <span className="sr-only">{`${stage.label}: ${stage.key === "responded" ? total : data[stage.key]} conversations`}</span>
                             </button>
                         ))}
                     </div>
@@ -261,7 +249,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                     <span className="text-sm font-semibold text-foreground">{stage.label}</span>
                                     <span className="text-xs text-muted-foreground">{conversions[stage.key]} conversion</span>
                                 </div>
-                                <span className="text-xl font-bold text-foreground">{cumulativeValues[stage.key]}</span>
+                                <span className="text-xl font-bold text-foreground">{stage.key === "responded" ? total : data[stage.key]}</span>
                             </button>
                         ))}
                     </div>
@@ -303,7 +291,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                         const percent = conversions[stage.key];
                         const pillWidth = Math.max(60, percent.length * 9 + 24);
                         const pillHeight = 32;
-                        
+
                         return (
                             <g key={stage.key}>
                                 {/* Pill background with border */}
@@ -317,15 +305,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                     stroke="hsla(210, 30%, 40%, 0.5)"
                                     strokeWidth="2"
                                 />
-                                <text
-                                    x={xPos}
-                                    y={centerY + 5}
-                                    textAnchor="middle"
-                                    fill="white"
-                                    fontSize="14"
-                                    fontWeight="600"
-                                    fontFamily="system-ui, -apple-system, sans-serif"
-                                >
+                                <text x={xPos} y={centerY + 5} textAnchor="middle" fill="white" fontSize="14" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif">
                                     {percent}
                                 </text>
                             </g>
