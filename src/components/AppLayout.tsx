@@ -22,7 +22,7 @@ export function AppLayout({ children, hideMobileHeader = false }: AppLayoutProps
     }, [location.pathname]);
 
     return (
-        <div className="flex min-h-screen w-full bg-background">
+        <div className="flex h-screen w-full bg-background overflow-hidden">
             <div className="hidden md:flex md:shrink-0">
                 <AppSidebar />
             </div>
