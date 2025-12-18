@@ -180,43 +180,41 @@ export default function TeamLogin() {
     // If we're processing a token login
     if (token) {
         return (
-            <div className="min-h-screen bg-background flex items-center justify-center p-4">
-                <div className="w-full max-w-md">
-                    <div className="bg-card rounded-xl shadow-lg p-8 border border-border">
-                        <div className="text-center mb-8">
-                            <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">SetDM</h1>
-                        </div>
-
-                        {isLoggingIn && (
-                            <div className="text-center py-8">
-                                <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-                                <p className="text-muted-foreground">Logging you in...</p>
-                            </div>
-                        )}
-
-                        {loginError && (
-                            <div className="text-center py-8">
-                                <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
-                                    <XCircle className="h-8 w-8 text-destructive" />
-                                </div>
-                                <h2 className="text-xl font-semibold mb-2">Login Failed</h2>
-                                <p className="text-muted-foreground mb-6">{loginError}</p>
-                                <Button variant="outline" onClick={() => navigate("/team-login")}>
-                                    Try Again
-                                </Button>
-                            </div>
-                        )}
-
-                        {loginSuccess && (
-                            <div className="text-center py-8">
-                                <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
-                                    <CheckCircle className="h-8 w-8 text-green-500" />
-                                </div>
-                                <h2 className="text-xl font-semibold mb-2">Welcome back!</h2>
-                                <p className="text-muted-foreground">Redirecting to dashboard...</p>
-                            </div>
-                        )}
+            <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+                <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-card">
+                    <div className="mb-6 text-center">
+                        <h1 className="text-2xl font-bold text-foreground">Sign in to SetDM</h1>
                     </div>
+
+                    {isLoggingIn && (
+                        <div className="py-8 text-center">
+                            <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-muted-foreground" />
+                            <p className="text-muted-foreground">Logging you in...</p>
+                        </div>
+                    )}
+
+                    {loginError && (
+                        <div className="py-8 text-center">
+                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+                                <XCircle className="h-8 w-8 text-destructive" />
+                            </div>
+                            <h2 className="mb-2 text-xl font-semibold text-foreground">Login Failed</h2>
+                            <p className="mb-6 text-muted-foreground">{loginError}</p>
+                            <Button variant="outline" onClick={() => navigate("/team-login")}>
+                                Try Again
+                            </Button>
+                        </div>
+                    )}
+
+                    {loginSuccess && (
+                        <div className="py-8 text-center">
+                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+                                <CheckCircle className="h-8 w-8 text-green-500" />
+                            </div>
+                            <h2 className="mb-2 text-xl font-semibold text-foreground">Welcome back!</h2>
+                            <p className="text-muted-foreground">Redirecting to dashboard...</p>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -224,96 +222,100 @@ export default function TeamLogin() {
 
     // Request magic link form
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                <div className="bg-card rounded-xl shadow-lg p-8 border border-border">
-                    <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">SetDM</h1>
-                    </div>
-
-                    {requestSent ? (
-                        <div className="text-center py-8">
-                            <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
-                                <Mail className="h-8 w-8 text-green-500" />
-                            </div>
-                            <h2 className="text-xl font-semibold mb-2">Check your email!</h2>
-                            <p className="text-muted-foreground mb-6">If an account exists with that email, we've sent you a login link. It expires in 15 minutes.</p>
-                            <Button variant="outline" onClick={() => setRequestSent(false)}>
-                                Send Another
-                            </Button>
-                        </div>
-                    ) : showWorkspacePicker ? (
-                        <div>
-                            <div className="text-center mb-6">
-                                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                                    <Users className="h-8 w-8 text-primary" />
-                                </div>
-                                <h2 className="text-xl font-semibold mb-2">Select Workspace</h2>
-                                <p className="text-muted-foreground text-sm">You're a member of multiple workspaces. Select one to log in.</p>
-                            </div>
-
-                            <div className="space-y-2">
-                                {workspaces.map((workspace) => (
-                                    <button
-                                        key={workspace.workspaceId}
-                                        onClick={() => handleWorkspaceSelect(workspace.workspaceId)}
-                                        disabled={isRequesting}
-                                        className="w-full flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
-                                    >
-                                        <div>
-                                            <p className="font-medium">@{workspace.workspaceUsername || workspace.workspaceId}</p>
-                                            <p className="text-xs text-muted-foreground capitalize">{workspace.role}</p>
-                                        </div>
-                                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                                    </button>
-                                ))}
-                            </div>
-
-                            <Button variant="ghost" className="w-full mt-4" onClick={() => setShowWorkspacePicker(false)}>
-                                Back
-                            </Button>
-                        </div>
-                    ) : (
-                        <div>
-                            <div className="text-center mb-6">
-                                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                                    <Users className="h-8 w-8 text-primary" />
-                                </div>
-                                <h2 className="text-xl font-semibold mb-2">Team Member Login</h2>
-                                <p className="text-muted-foreground text-sm">Enter your email to receive a login link.</p>
-                            </div>
-
-                            <form onSubmit={handleRequestLogin} className="space-y-4">
-                                <div>
-                                    <Label htmlFor="email">Email</Label>
-                                    <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" className="mt-1.5" required autoFocus />
-                                </div>
-
-                                {requestError && <p className="text-sm text-destructive text-center">{requestError}</p>}
-
-                                <Button type="submit" className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:opacity-90" disabled={isRequesting || !email.trim()}>
-                                    {isRequesting ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            Sending...
-                                        </>
-                                    ) : (
-                                        "Send Login Link"
-                                    )}
-                                </Button>
-                            </form>
-
-                            <div className="mt-6 text-center">
-                                <p className="text-sm text-muted-foreground">
-                                    Are you the account owner?{" "}
-                                    <button type="button" onClick={() => navigate("/login")} className="text-primary hover:underline">
-                                        Log in with Instagram
-                                    </button>
-                                </p>
-                            </div>
-                        </div>
-                    )}
+        <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-card">
+                <div className="mb-6 text-center">
+                    <h1 className="text-2xl font-bold text-foreground">Team Member Login</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">Enter your email to receive a login link.</p>
                 </div>
+
+                {requestSent ? (
+                    <div className="py-8 text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+                            <Mail className="h-8 w-8 text-green-500" />
+                        </div>
+                        <h2 className="mb-2 text-xl font-semibold text-foreground">Check your email!</h2>
+                        <p className="mb-6 text-muted-foreground">
+                            If an account exists with that email, we've sent you a login link. It expires in 15 minutes.
+                        </p>
+                        <Button variant="outline" onClick={() => setRequestSent(false)}>
+                            Send Another
+                        </Button>
+                    </div>
+                ) : showWorkspacePicker ? (
+                    <div>
+                        <div className="mb-6 text-center">
+                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                                <Users className="h-8 w-8 text-primary" />
+                            </div>
+                            <h2 className="mb-2 text-xl font-semibold text-foreground">Select Workspace</h2>
+                            <p className="text-sm text-muted-foreground">You're a member of multiple workspaces. Select one to log in.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            {workspaces.map((workspace) => (
+                                <button
+                                    key={workspace.workspaceId}
+                                    onClick={() => handleWorkspaceSelect(workspace.workspaceId)}
+                                    disabled={isRequesting}
+                                    className="flex w-full items-center justify-between rounded-lg border border-border p-4 text-left transition-colors hover:bg-muted/50 disabled:opacity-50"
+                                >
+                                    <div>
+                                        <p className="font-medium text-foreground">@{workspace.workspaceUsername || workspace.workspaceId}</p>
+                                        <p className="text-xs capitalize text-muted-foreground">{workspace.role}</p>
+                                    </div>
+                                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                                </button>
+                            ))}
+                        </div>
+
+                        <Button variant="ghost" className="mt-4 w-full" onClick={() => setShowWorkspacePicker(false)}>
+                            Back
+                        </Button>
+                    </div>
+                ) : (
+                    <div>
+                        <form onSubmit={handleRequestLogin} className="space-y-4">
+                            <div>
+                                <Label htmlFor="email">Email</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="your@email.com"
+                                    className="mt-1.5"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+
+                            {requestError && (
+                                <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+                                    {requestError}
+                                </div>
+                            )}
+
+                            <Button type="submit" className="w-full" size="lg" disabled={isRequesting || !email.trim()}>
+                                {isRequesting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Sending...
+                                    </>
+                                ) : (
+                                    "Send Login Link"
+                                )}
+                            </Button>
+                        </form>
+
+                        <p className="mt-6 text-center text-sm text-muted-foreground">
+                            Are you the account owner?{" "}
+                            <button type="button" onClick={() => navigate("/login")} className="text-primary hover:underline">
+                                Log in with Instagram
+                            </button>
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

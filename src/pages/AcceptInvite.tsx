@@ -94,87 +94,96 @@ export default function AcceptInvite() {
     };
 
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                <div className="bg-card rounded-xl shadow-lg p-8 border border-border">
-                    {/* Logo */}
-                    <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">SetDM</h1>
-                    </div>
-
-                    {/* Loading State */}
-                    {isValidating && (
-                        <div className="text-center py-8">
-                            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-                            <p className="text-muted-foreground">Validating invite...</p>
-                        </div>
-                    )}
-
-                    {/* Error State */}
-                    {!isValidating && error && !success && (
-                        <div className="text-center py-8">
-                            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
-                                <XCircle className="h-8 w-8 text-destructive" />
-                            </div>
-                            <h2 className="text-xl font-semibold mb-2">Invalid Invite</h2>
-                            <p className="text-muted-foreground mb-6">{error}</p>
-                            <Button variant="outline" onClick={() => navigate("/login")}>
-                                Go to Login
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Success State */}
-                    {success && (
-                        <div className="text-center py-8">
-                            <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
-                                <CheckCircle className="h-8 w-8 text-green-500" />
-                            </div>
-                            <h2 className="text-xl font-semibold mb-2">Welcome to the team!</h2>
-                            <p className="text-muted-foreground">Redirecting you to the dashboard...</p>
-                        </div>
-                    )}
-
-                    {/* Accept Form */}
-                    {!isValidating && !error && inviteData && !success && (
-                        <div>
-                            <div className="text-center mb-6">
-                                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                                    <UserPlus className="h-8 w-8 text-primary" />
-                                </div>
-                                <h2 className="text-xl font-semibold mb-2">You're Invited!</h2>
-                                <p className="text-muted-foreground text-sm">
-                                    You've been invited to join as {inviteData.role === "admin" ? "an" : "a"} <span className="font-medium capitalize">{inviteData.role}</span>
-                                </p>
-                            </div>
-
-                            <form onSubmit={handleAccept} className="space-y-4">
-                                <div>
-                                    <Label htmlFor="email">Email</Label>
-                                    <Input id="email" type="email" value={inviteData.email} disabled className="mt-1.5 bg-muted" />
-                                </div>
-
-                                <div>
-                                    <Label htmlFor="name">Your Name</Label>
-                                    <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" className="mt-1.5" required autoFocus />
-                                </div>
-
-                                <Button type="submit" className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:opacity-90" disabled={isAccepting || !name.trim()}>
-                                    {isAccepting ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            Joining...
-                                        </>
-                                    ) : (
-                                        "Accept Invite"
-                                    )}
-                                </Button>
-                            </form>
-
-                            <p className="text-xs text-muted-foreground text-center mt-6">By accepting, you agree to our terms of service.</p>
-                        </div>
-                    )}
+        <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-card">
+                {/* Header */}
+                <div className="mb-6 text-center">
+                    <h1 className="text-2xl font-bold text-foreground">Join SetDM</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">Accept your team invitation</p>
                 </div>
+
+                {/* Loading State */}
+                {isValidating && (
+                    <div className="py-8 text-center">
+                        <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-muted-foreground" />
+                        <p className="text-muted-foreground">Validating invite...</p>
+                    </div>
+                )}
+
+                {/* Error State */}
+                {!isValidating && error && !success && (
+                    <div className="py-8 text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+                            <XCircle className="h-8 w-8 text-destructive" />
+                        </div>
+                        <h2 className="mb-2 text-xl font-semibold text-foreground">Invalid Invite</h2>
+                        <p className="mb-6 text-muted-foreground">{error}</p>
+                        <Button variant="outline" onClick={() => navigate("/login")}>
+                            Go to Login
+                        </Button>
+                    </div>
+                )}
+
+                {/* Success State */}
+                {success && (
+                    <div className="py-8 text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+                            <CheckCircle className="h-8 w-8 text-green-500" />
+                        </div>
+                        <h2 className="mb-2 text-xl font-semibold text-foreground">Welcome to the team!</h2>
+                        <p className="text-muted-foreground">Redirecting you to the dashboard...</p>
+                    </div>
+                )}
+
+                {/* Accept Form */}
+                {!isValidating && !error && inviteData && !success && (
+                    <div>
+                        <div className="mb-6 text-center">
+                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                                <UserPlus className="h-8 w-8 text-primary" />
+                            </div>
+                            <h2 className="mb-2 text-xl font-semibold text-foreground">You're Invited!</h2>
+                            <p className="text-sm text-muted-foreground">
+                                You've been invited to join as {inviteData.role === "admin" ? "an" : "a"}{" "}
+                                <span className="font-medium capitalize">{inviteData.role}</span>
+                            </p>
+                        </div>
+
+                        <form onSubmit={handleAccept} className="space-y-4">
+                            <div>
+                                <Label htmlFor="email">Email</Label>
+                                <Input id="email" type="email" value={inviteData.email} disabled className="mt-1.5 bg-muted" />
+                            </div>
+
+                            <div>
+                                <Label htmlFor="name">Your Name</Label>
+                                <Input
+                                    id="name"
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="Enter your name"
+                                    className="mt-1.5"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+
+                            <Button type="submit" className="w-full" size="lg" disabled={isAccepting || !name.trim()}>
+                                {isAccepting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Joining...
+                                    </>
+                                ) : (
+                                    "Accept Invite"
+                                )}
+                            </Button>
+                        </form>
+
+                        <p className="mt-6 text-center text-xs text-muted-foreground">By accepting, you agree to our terms of service.</p>
+                    </div>
+                )}
             </div>
         </div>
     );
