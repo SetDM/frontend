@@ -1300,16 +1300,11 @@ export default function Prompt() {
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            You have unsaved changes. Do you want to save before leaving?
-                        </AlertDialogDescription>
+                        <AlertDialogDescription>You have unsaved changes. Do you want to save before leaving?</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => blocker.reset?.()}>Cancel</AlertDialogCancel>
-                        <Button
-                            variant="outline"
-                            onClick={() => blocker.proceed?.()}
-                        >
+                        <Button variant="outline" onClick={() => blocker.proceed?.()}>
                             Discard Changes
                         </Button>
                         <AlertDialogAction

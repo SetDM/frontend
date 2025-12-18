@@ -93,7 +93,7 @@ export default function Settings() {
 
     // Store all settings in a single state object
     const [settings, setSettings] = useState<WorkspaceSettings>(DEFAULT_SETTINGS);
-    
+
     // Track original settings to detect unsaved changes
     const originalSettingsRef = useRef<string>("");
     const hasUnsavedChanges = originalSettingsRef.current !== "" && originalSettingsRef.current !== JSON.stringify(settings);
@@ -1072,16 +1072,11 @@ export default function Settings() {
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                You have unsaved changes. Do you want to save before leaving?
-                            </AlertDialogDescription>
+                            <AlertDialogDescription>You have unsaved changes. Do you want to save before leaving?</AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel onClick={() => blocker.reset?.()}>Cancel</AlertDialogCancel>
-                            <Button
-                                variant="outline"
-                                onClick={() => blocker.proceed?.()}
-                            >
+                            <Button variant="outline" onClick={() => blocker.proceed?.()}>
                                 Discard Changes
                             </Button>
                             <AlertDialogAction
