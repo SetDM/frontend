@@ -53,13 +53,14 @@ export default function TeamLogin() {
 
                 setLoginSuccess(true);
 
-                // Get the auth token and redirect
+                // Get the auth token and redirect - use full page navigation
+                // so AuthProvider re-initializes and picks up the token from URL
                 const authToken = data.token;
                 setTimeout(() => {
                     if (authToken) {
-                        navigate(`/?token=${encodeURIComponent(authToken)}`);
+                        window.location.href = `/?token=${encodeURIComponent(authToken)}`;
                     } else {
-                        navigate("/");
+                        window.location.href = "/";
                     }
                 }, 1500);
             } catch (err) {

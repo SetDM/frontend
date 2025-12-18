@@ -78,12 +78,13 @@ export default function AcceptInvite() {
             // Get the auth token from the response
             const authToken = data.token;
 
-            // Redirect to dashboard with token so AuthProvider picks it up
+            // Redirect to dashboard with token - use full page navigation
+            // so AuthProvider re-initializes and picks up the token from URL
             setTimeout(() => {
                 if (authToken) {
-                    navigate(`/?token=${encodeURIComponent(authToken)}`);
+                    window.location.href = `/?token=${encodeURIComponent(authToken)}`;
                 } else {
-                    navigate("/");
+                    window.location.href = "/";
                 }
             }, 1500);
         } catch (err) {
