@@ -75,10 +75,17 @@ export default function AcceptInvite() {
 
             setSuccess(true);
 
-            // Redirect to dashboard after 2 seconds
+            // Get the auth token from the response
+            const authToken = data.token;
+
+            // Redirect to dashboard with token so AuthProvider picks it up
             setTimeout(() => {
-                navigate("/");
-            }, 2000);
+                if (authToken) {
+                    navigate(`/?token=${encodeURIComponent(authToken)}`);
+                } else {
+                    navigate("/");
+                }
+            }, 1500);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to accept invite.");
         } finally {
@@ -92,9 +99,7 @@ export default function AcceptInvite() {
                 <div className="bg-card rounded-xl shadow-lg p-8 border border-border">
                     {/* Logo */}
                     <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">
-                            SetDM
-                        </h1>
+                        <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">SetDM</h1>
                     </div>
 
                     {/* Loading State */}
@@ -139,43 +144,22 @@ export default function AcceptInvite() {
                                 </div>
                                 <h2 className="text-xl font-semibold mb-2">You're Invited!</h2>
                                 <p className="text-muted-foreground text-sm">
-                                    You've been invited to join as{" "}
-                                    {inviteData.role === "admin" ? "an" : "a"}{" "}
-                                    <span className="font-medium capitalize">{inviteData.role}</span>
+                                    You've been invited to join as {inviteData.role === "admin" ? "an" : "a"} <span className="font-medium capitalize">{inviteData.role}</span>
                                 </p>
                             </div>
 
                             <form onSubmit={handleAccept} className="space-y-4">
                                 <div>
                                     <Label htmlFor="email">Email</Label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        value={inviteData.email}
-                                        disabled
-                                        className="mt-1.5 bg-muted"
-                                    />
+                                    <Input id="email" type="email" value={inviteData.email} disabled className="mt-1.5 bg-muted" />
                                 </div>
 
                                 <div>
                                     <Label htmlFor="name">Your Name</Label>
-                                    <Input
-                                        id="name"
-                                        type="text"
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        placeholder="Enter your name"
-                                        className="mt-1.5"
-                                        required
-                                        autoFocus
-                                    />
+                                    <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" className="mt-1.5" required autoFocus />
                                 </div>
 
-                                <Button
-                                    type="submit"
-                                    className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:opacity-90"
-                                    disabled={isAccepting || !name.trim()}
-                                >
+                                <Button type="submit" className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:opacity-90" disabled={isAccepting || !name.trim()}>
                                     {isAccepting ? (
                                         <>
                                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -187,9 +171,7 @@ export default function AcceptInvite() {
                                 </Button>
                             </form>
 
-                            <p className="text-xs text-muted-foreground text-center mt-6">
-                                By accepting, you agree to our terms of service.
-                            </p>
+                            <p className="text-xs text-muted-foreground text-center mt-6">By accepting, you agree to our terms of service.</p>
                         </div>
                     )}
                 </div>

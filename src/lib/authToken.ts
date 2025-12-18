@@ -11,6 +11,14 @@ export interface StoredWorkspaceAccount {
   username?: string;
   accountType?: string;
   lastLoginAt?: string;
+  // Team member fields
+  isTeamMember?: boolean;
+  id?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  workspaceId?: string;
+  workspaceUsername?: string | null;
 }
 
 export interface WorkspaceStorageState {
@@ -28,7 +36,25 @@ const sanitizeWorkspaceEntry = (entry: unknown): StoredWorkspaceAccount | null =
     return null;
   }
 
-  const record = entry as Partial<StoredWorkspaceAccount> & { instagramId?: unknown; token?: unknown };
+  const record = entry as Partial<StoredWorkspaceAccount> & { instagramId?: unknown; token?: unknown; id?: unknown; isTeamMember?: unknown };
+
+  // Team member entry
+  if (record.isTeamMember === true && typeof record.id === "string" && typeof record.token === "string") {
+    return {
+      instagramId: record.id, // Use id as the key
+      token: record.token,
+      isTeamMember: true,
+      id: record.id,
+      email: typeof record.email === "string" ? record.email : undefined,
+      name: typeof record.name === "string" ? record.name : undefined,
+      role: typeof record.role === "string" ? record.role : undefined,
+      workspaceId: typeof record.workspaceId === "string" ? record.workspaceId : undefined,
+      workspaceUsername: typeof record.workspaceUsername === "string" ? record.workspaceUsername : null,
+      lastLoginAt: typeof record.lastLoginAt === "string" ? record.lastLoginAt : undefined,
+    };
+  }
+
+  // Instagram user entry
   if (typeof record.instagramId !== "string" || typeof record.token !== "string") {
     return null;
   }

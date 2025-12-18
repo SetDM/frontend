@@ -17,6 +17,7 @@ import AuthSuccess from "./pages/AuthSuccess";
 import AuthError from "./pages/AuthError";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import AcceptInvite from "./pages/AcceptInvite";
+import TeamLogin from "./pages/TeamLogin";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,8 @@ const App = () => (
                         <Route path="/auth/error" element={<AuthError />} />
                         <Route path="/privacy" element={<PrivacyPolicy />} />
                         <Route path="/invite/:token" element={<AcceptInvite />} />
+                        <Route path="/team-login" element={<TeamLogin />} />
+                        <Route path="/team-login/:token" element={<TeamLogin />} />
                         <Route element={<ProtectedRoute />}>
                             <Route path="/" element={<Dashboard />} />
                             <Route path="/messages" element={<Messages />} />

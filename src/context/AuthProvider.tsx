@@ -19,7 +19,31 @@ const extractUser = (payload: AuthApiResponse): AuthUser | null => {
   const container = (payload as { user?: AuthUser | null }).user ?? payload;
   if (!container) return null;
 
-  const candidate = container as Partial<AuthUser>;
+  const tokenCandidate =
+    typeof (payload as { token?: unknown }).token === "string"
+      ? ((payload as { token?: string }).token)
+      : typeof (container as { token?: string }).token === "string"
+        ? (container as { token?: string }).token
+        : undefined;
+
+  // Check if this is a team member response
+  const teamCandidate = container as { isTeamMember?: boolean; id?: string; email?: string; name?: string; role?: string; workspaceId?: string; workspaceUsername?: string | null };
+  if (teamCandidate.isTeamMember === true && teamCandidate.id && teamCandidate.email) {
+    return {
+      id: teamCandidate.id,
+      email: teamCandidate.email,
+      name: teamCandidate.name || "",
+      role: (teamCandidate.role as "admin" | "editor" | "viewer") || "viewer",
+      workspaceId: teamCandidate.workspaceId || "",
+      workspaceUsername: teamCandidate.workspaceUsername || null,
+      lastLoginAt: (container as { lastLoginAt?: string }).lastLoginAt || null,
+      token: tokenCandidate,
+      isTeamMember: true,
+    };
+  }
+
+  // Check if this is an Instagram user response
+  const candidate = container as { instagramId?: string; username?: string; accountType?: string; lastLoginAt?: string };
   if (
     typeof candidate.instagramId !== "string" ||
     typeof candidate.username !== "string" ||
@@ -29,17 +53,13 @@ const extractUser = (payload: AuthApiResponse): AuthUser | null => {
     return null;
   }
 
-  const tokenCandidate =
-    typeof (payload as { token?: unknown }).token === "string"
-      ? ((payload as { token?: string }).token)
-      : typeof candidate.token === "string"
-        ? candidate.token
-        : undefined;
-
   return {
-    ...candidate,
+    instagramId: candidate.instagramId,
+    username: candidate.username,
+    accountType: candidate.accountType,
+    lastLoginAt: candidate.lastLoginAt,
     token: tokenCandidate,
-  } as AuthUser;
+  };
 };
 
 interface AuthProviderProps {
@@ -113,35 +133,55 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const normalizedUser = extractUser(data);
 
         if (!normalizedUser) {
-          throw new Error("Unable to resolve authenticated Instagram account.");
+          throw new Error("Unable to resolve authenticated account.");
         }
 
-        const workspaceEntry: StoredWorkspaceAccount = {
-          ...normalizedUser,
-          token: normalizedUser.token ?? tokenToUse,
-        };
+        // Create workspace entry - handle both team members and Instagram users
+        const isTeamMemberUser = "isTeamMember" in normalizedUser && normalizedUser.isTeamMember === true;
+        const workspaceKey = isTeamMemberUser ? (normalizedUser as { id: string }).id : (normalizedUser as { instagramId: string }).instagramId;
+
+        const workspaceEntry: StoredWorkspaceAccount = isTeamMemberUser
+          ? {
+              instagramId: workspaceKey, // Use id as key for storage
+              token: normalizedUser.token ?? tokenToUse,
+              isTeamMember: true,
+              id: (normalizedUser as { id: string }).id,
+              email: (normalizedUser as { email: string }).email,
+              name: (normalizedUser as { name: string }).name,
+              role: (normalizedUser as { role: string }).role,
+              workspaceId: (normalizedUser as { workspaceId: string }).workspaceId,
+              workspaceUsername: (normalizedUser as { workspaceUsername: string | null }).workspaceUsername,
+              lastLoginAt: (normalizedUser as { lastLoginAt: string | null }).lastLoginAt || undefined,
+            }
+          : {
+              instagramId: (normalizedUser as { instagramId: string }).instagramId,
+              token: normalizedUser.token ?? tokenToUse,
+              username: (normalizedUser as { username: string }).username,
+              accountType: (normalizedUser as { accountType: string }).accountType,
+              lastLoginAt: (normalizedUser as { lastLoginAt: string }).lastLoginAt,
+            };
 
         setWorkspaceState((prev) => {
           const nextWorkspaces = { ...prev.workspaces };
 
           if (
             options?.instagramId &&
-            options.instagramId !== workspaceEntry.instagramId &&
+            options.instagramId !== workspaceKey &&
             nextWorkspaces[options.instagramId]
           ) {
             delete nextWorkspaces[options.instagramId];
           }
 
-          nextWorkspaces[workspaceEntry.instagramId] = workspaceEntry;
+          nextWorkspaces[workspaceKey] = workspaceEntry;
 
           const shouldActivate =
             options?.makeActive === true ||
             !prev.activeWorkspaceId ||
             prev.activeWorkspaceId === targetId ||
-            prev.activeWorkspaceId === workspaceEntry.instagramId;
+            prev.activeWorkspaceId === workspaceKey;
 
           return {
-            activeWorkspaceId: shouldActivate ? workspaceEntry.instagramId : prev.activeWorkspaceId,
+            activeWorkspaceId: shouldActivate ? workspaceKey : prev.activeWorkspaceId,
             workspaces: nextWorkspaces,
           };
         });
@@ -313,12 +353,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return snapshot.workspaces[snapshot.activeWorkspaceId] ?? null;
   }, [workspaceState]);
 
-  const user = useMemo(() => {
+  const user = useMemo((): AuthUser | null => {
     if (!activeWorkspace) {
       return null;
     }
     const { token: _token, ...rest } = activeWorkspace;
-    return rest;
+
+    // Return team member user
+    if (rest.isTeamMember && rest.id) {
+      return {
+        id: rest.id,
+        email: rest.email || "",
+        name: rest.name || "",
+        role: (rest.role as "admin" | "editor" | "viewer") || "viewer",
+        workspaceId: rest.workspaceId || "",
+        workspaceUsername: rest.workspaceUsername || null,
+        lastLoginAt: rest.lastLoginAt || null,
+        isTeamMember: true,
+      };
+    }
+
+    // Return Instagram user
+    return {
+      instagramId: rest.instagramId,
+      username: rest.username || "",
+      accountType: rest.accountType || "",
+      lastLoginAt: rest.lastLoginAt || "",
+    };
   }, [activeWorkspace]);
 
   const authToken = activeWorkspace?.token ?? null;

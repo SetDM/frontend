@@ -1,12 +1,35 @@
 export type FunnelStage = "responded" | "lead" | "qualified" | "booking-sent" | "call-booked" | "sale" | "flagged";
 
-export interface AuthUser {
+// Instagram user (workspace owner)
+export interface InstagramAuthUser {
     instagramId: string;
     username: string;
     accountType: string;
     lastLoginAt: string;
     token?: string;
+    isTeamMember?: false;
 }
+
+// Team member user
+export interface TeamMemberAuthUser {
+    id: string;
+    email: string;
+    name: string;
+    role: "admin" | "editor" | "viewer";
+    workspaceId: string;
+    workspaceUsername: string | null;
+    lastLoginAt: string | null;
+    token?: string;
+    isTeamMember: true;
+}
+
+// Union type for auth users
+export type AuthUser = InstagramAuthUser | TeamMemberAuthUser;
+
+// Helper to check if user is team member
+export const isTeamMember = (user: AuthUser | null): user is TeamMemberAuthUser => {
+    return user !== null && "isTeamMember" in user && user.isTeamMember === true;
+};
 
 export interface Prospect {
     id: string;
