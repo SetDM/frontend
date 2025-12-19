@@ -32,17 +32,17 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
         navigate(`/messages?stage=${filter}`);
     };
 
-    // Total is the sum of all stages - this is what "Responded" represents
-    const total = data.responded + data.lead + data.qualified + data.callBooked + data.sale;
-
-    // Cumulative values from each stage onwards (for proper funnel tapering)
-    const cumulativeValues = {
-        responded: total,
-        lead: data.lead + data.qualified + data.callBooked + data.sale,
-        qualified: data.qualified + data.callBooked + data.sale,
-        callBooked: data.callBooked + data.sale,
+    // Display values - just use the raw data from backend (already cumulative)
+    const displayValues = {
+        responded: data.responded,
+        lead: data.lead,
+        qualified: data.qualified,
+        callBooked: data.callBooked,
         sale: data.sale,
     };
+
+    // For funnel shape, use the values directly
+    const maxValue = Math.max(data.responded, 1);
 
     // Calculate stage-to-stage conversion percentages
     const getConversionPercent = (current: number, previous: number) => {
@@ -53,20 +53,19 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
 
     const conversions: Record<StageKey, string> = {
         responded: "100%",
-        lead: getConversionPercent(cumulativeValues.lead, cumulativeValues.responded),
-        qualified: getConversionPercent(cumulativeValues.qualified, cumulativeValues.lead),
-        callBooked: getConversionPercent(cumulativeValues.callBooked, cumulativeValues.qualified),
-        sale: getConversionPercent(cumulativeValues.sale, cumulativeValues.callBooked),
+        lead: getConversionPercent(displayValues.lead, displayValues.responded),
+        qualified: getConversionPercent(displayValues.qualified, displayValues.lead),
+        callBooked: getConversionPercent(displayValues.callBooked, displayValues.qualified),
+        sale: getConversionPercent(displayValues.sale, displayValues.callBooked),
     };
 
-    // Calculate heights as percentage of total - these will drive the funnel shape
-    const maxValue = Math.max(total, 1);
+    // Calculate heights as percentage of responded - these will drive the funnel shape
     const stageHeightPercents = [
         100, // responded - always 100%
-        Math.max(8, (cumulativeValues.lead / maxValue) * 100),
-        Math.max(6, (cumulativeValues.qualified / maxValue) * 100),
-        Math.max(4, (cumulativeValues.callBooked / maxValue) * 100),
-        Math.max(2, (cumulativeValues.sale / maxValue) * 100),
+        Math.max(8, (displayValues.lead / maxValue) * 100),
+        Math.max(6, (displayValues.qualified / maxValue) * 100),
+        Math.max(4, (displayValues.callBooked / maxValue) * 100),
+        Math.max(2, (displayValues.sale / maxValue) * 100),
     ];
 
     // Ensure monotonically decreasing (funnel only narrows)
@@ -199,8 +198,8 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
             {/* Stage labels, counts, and action buttons */}
             <div className="mb-6 hidden grid-cols-5 gap-2 md:grid">
                 {stages.map((stage) => {
-                    // Show cumulative count for each stage
-                    const value = cumulativeValues[stage.key];
+                    // Show the count for each stage
+                    const value = displayValues[stage.key];
                     return (
                         <div key={stage.key} className="flex flex-col items-center text-center">
                             <span className="text-xs font-medium text-muted-foreground mb-1">{stage.label}</span>
@@ -231,7 +230,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                     stageColors[stage.key]
                                 )}
                             >
-                                <span className="sr-only">{`${stage.label}: ${cumulativeValues[stage.key]} conversations`}</span>
+                                <span className="sr-only">{`${stage.label}: ${displayValues[stage.key]} conversations`}</span>
                             </button>
                         ))}
                     </div>
@@ -249,7 +248,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                     <span className="text-sm font-semibold text-foreground">{stage.label}</span>
                                     <span className="text-xs text-muted-foreground">{conversions[stage.key]} conversion</span>
                                 </div>
-                                <span className="text-xl font-bold text-foreground">{cumulativeValues[stage.key]}</span>
+                                <span className="text-xl font-bold text-foreground">{displayValues[stage.key]}</span>
                             </button>
                         ))}
                     </div>
