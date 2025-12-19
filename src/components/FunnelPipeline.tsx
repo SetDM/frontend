@@ -199,8 +199,8 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
             {/* Stage labels, counts, and action buttons */}
             <div className="mb-6 hidden grid-cols-5 gap-2 md:grid">
                 {stages.map((stage) => {
-                    // Show actual count for each stage (not cumulative)
-                    const value = stage.key === "responded" ? total : data[stage.key];
+                    // Show cumulative count for each stage
+                    const value = cumulativeValues[stage.key];
                     return (
                         <div key={stage.key} className="flex flex-col items-center text-center">
                             <span className="text-xs font-medium text-muted-foreground mb-1">{stage.label}</span>
@@ -231,7 +231,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                     stageColors[stage.key]
                                 )}
                             >
-                                <span className="sr-only">{`${stage.label}: ${stage.key === "responded" ? total : data[stage.key]} conversations`}</span>
+                                <span className="sr-only">{`${stage.label}: ${cumulativeValues[stage.key]} conversations`}</span>
                             </button>
                         ))}
                     </div>
@@ -249,7 +249,7 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                     <span className="text-sm font-semibold text-foreground">{stage.label}</span>
                                     <span className="text-xs text-muted-foreground">{conversions[stage.key]} conversion</span>
                                 </div>
-                                <span className="text-xl font-bold text-foreground">{stage.key === "responded" ? total : data[stage.key]}</span>
+                                <span className="text-xl font-bold text-foreground">{cumulativeValues[stage.key]}</span>
                             </button>
                         ))}
                     </div>
