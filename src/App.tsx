@@ -31,22 +31,22 @@ const App = () => (
                 <AuthProvider>
                     <UnsavedChangesProvider>
                         <Routes>
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/auth/success" element={<AuthSuccess />} />
-                        <Route path="/auth/error" element={<AuthError />} />
-                        <Route path="/privacy" element={<PrivacyPolicy />} />
-                        <Route path="/invite/:token" element={<AcceptInvite />} />
-                        <Route path="/team-login" element={<TeamLogin />} />
-                        <Route path="/team-login/:token" element={<TeamLogin />} />
-                        <Route element={<ProtectedRoute />}>
-                            <Route path="/" element={<Dashboard />} />
-                            <Route path="/messages" element={<Messages />} />
-                            <Route path="/cold-outreach" element={<ColdOutreach />} />
-                            <Route path="/cold-outreach/stats" element={<ColdOutreachStats />} />
-                            <Route path="/prompt" element={<Prompt />} />
-                            <Route path="/settings" element={<Settings />} />
-                            <Route path="*" element={<NotFound />} />
-                        </Route>
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/auth/success" element={<AuthSuccess />} />
+                            <Route path="/auth/error" element={<AuthError />} />
+                            <Route path="/privacy" element={<PrivacyPolicy />} />
+                            <Route path="/invite/:token" element={<AcceptInvite />} />
+                            <Route path="/team-login" element={<TeamLogin />} />
+                            <Route path="/team-login/:token" element={<TeamLogin />} />
+                            <Route element={<ProtectedRoute />}>
+                                <Route path="/" element={<Dashboard />} />
+                                <Route path="/messages" element={<Messages />} />
+                                <Route path="/cold-outreach" element={<ColdOutreach />} />
+                                <Route path="/cold-outreach/stats" element={<ColdOutreachStats />} />
+                                <Route path="/prompt" element={<Prompt />} />
+                                <Route path="/settings" element={<Settings />} />
+                                <Route path="*" element={<NotFound />} />
+                            </Route>
                         </Routes>
                     </UnsavedChangesProvider>
                 </AuthProvider>

@@ -31,15 +31,7 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkCompatProps>(({ className, 
         onClick?.(e);
     };
 
-    return (
-        <RouterNavLink
-            ref={ref}
-            to={to}
-            onClick={handleClick}
-            className={({ isActive, isPending }) => cn(className, isActive && activeClassName, isPending && pendingClassName)}
-            {...props}
-        />
-    );
+    return <RouterNavLink ref={ref} to={to} onClick={handleClick} className={({ isActive, isPending }) => cn(className, isActive && activeClassName, isPending && pendingClassName)} {...props} />;
 });
 
 NavLink.displayName = "NavLink";

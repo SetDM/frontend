@@ -71,9 +71,12 @@ interface KeywordSequenceData {
     followups: FollowupMessage[];
 }
 
+type PromptMode = "system" | "custom" | "combined";
+
 interface PromptConfig {
     coachName: string;
-    addToExisting: boolean;
+    addToExisting: boolean; // Keep for backward compatibility
+    promptMode: PromptMode; // New: system, custom, or combined
     coachingDetails: string;
     styleNotes: string;
     objectionHandlers: ObjectionHandler[];
@@ -104,7 +107,8 @@ const DEFAULT_KEYWORD_SEQUENCE: KeywordSequenceData = {
 
 const DEFAULT_CONFIG: PromptConfig = {
     coachName: "Ayden",
-    addToExisting: true,
+    addToExisting: true, // Keep for backward compatibility
+    promptMode: "combined", // Default to combined
     coachingDetails: "",
     styleNotes: "",
     objectionHandlers: [{ id: crypto.randomUUID(), objection: "", response: "" }],
@@ -658,10 +662,21 @@ export default function Prompt() {
                 }
 
                 if (payload.config) {
+                    // Determine promptMode from existing data (backward compatibility)
+                    let promptMode: PromptMode = "combined";
+                    if (payload.config?.promptMode) {
+                        promptMode = payload.config.promptMode;
+                    } else if (payload.config?.addToExisting === false) {
+                        promptMode = "custom";
+                    } else if (payload.config?.addToExisting === true) {
+                        promptMode = "combined";
+                    }
+
                     const loadedConfig: PromptConfig = {
                         ...DEFAULT_CONFIG,
                         coachName: payload.config?.coachName || DEFAULT_CONFIG.coachName,
-                        addToExisting: payload.config?.addToExisting ?? DEFAULT_CONFIG.addToExisting,
+                        addToExisting: promptMode === "combined", // Sync for backward compatibility
+                        promptMode,
                         coachingDetails: payload.config?.coachingDetails || DEFAULT_CONFIG.coachingDetails,
                         styleNotes: payload.config?.styleNotes || DEFAULT_CONFIG.styleNotes,
                         objectionHandlers: payload.config?.objectionHandlers?.length ? payload.config.objectionHandlers : [{ id: crypto.randomUUID(), objection: "", response: "" }],
@@ -943,48 +958,76 @@ export default function Prompt() {
                             </div>
 
                             {/* 
-                ADD TO EXISTING SCRIPTS TOGGLE
+                SCRIPT MODE SELECTOR
                 
-                CRITICAL FEATURE:
-                - When ON: Coach's scripts are combined with our AI optimization
-                - When OFF: Only coach's scripts are used (full control)
+                Three options:
+                - System: Use our proven scripts only
+                - Custom: Use your scripts only
+                - Combined: Merge your scripts with our proven patterns
               */}
-                            <div
-                                className={cn(
-                                    "flex items-center justify-between gap-3 p-4 rounded-xl border-2 transition-all mb-4",
-                                    config.addToExisting ? "bg-primary/10 border-primary" : "bg-card border-border"
-                                )}
-                            >
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <Zap className={cn("h-4 w-4", config.addToExisting ? "text-primary" : "text-muted-foreground")} />
-                                        <span className="text-sm sm:text-base font-semibold leading-none">Combine with proven scripts</span>
-                                        <TooltipProvider delayDuration={100}>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <button type="button" className="inline-flex">
-                                                        <Info className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
-                                                    </button>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="top" className="max-w-xs z-[100]">
-                                                    <p className="text-sm">
-                                                        <strong>Proven scripts</strong> are battle-tested conversation flows trained on 10,000+ successful conversations. When enabled, your custom
-                                                        scripts are intelligently combined with these proven patterns to maximize engagement and booking rates.
-                                                    </p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </div>
-                                    <p className={cn("text-xs sm:text-sm mt-1", config.addToExisting ? "text-primary/80" : "text-muted-foreground")}>
-                                        {config.addToExisting ? "Your customizations will be combined with our battle-tested scripts" : "Full control: Only your scripts will be used"}
-                                    </p>
+                            <div className="mb-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Zap className="h-4 w-4 text-primary" />
+                                    <span className="text-sm sm:text-base font-semibold">Script Mode</span>
+                                    <TooltipProvider delayDuration={100}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button type="button" className="inline-flex">
+                                                    <Info className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" className="max-w-xs z-[100]">
+                                                <p className="text-sm">
+                                                    Choose how AI scripts are used. <strong>Proven scripts</strong> are battle-tested conversation flows trained on 10,000+ successful conversations.
+                                                </p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
                                 </div>
-                                <Switch
-                                    checked={config.addToExisting}
-                                    onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, addToExisting: checked }))}
-                                    className="shrink-0"
-                                    disabled={isFetchingPrompt}
-                                />
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setConfig((prev) => ({ ...prev, promptMode: "system", addToExisting: false }))}
+                                        disabled={isFetchingPrompt}
+                                        className={cn(
+                                            "p-3 rounded-lg border-2 text-left transition-all",
+                                            config.promptMode === "system"
+                                                ? "bg-primary/10 border-primary"
+                                                : "bg-card border-border hover:border-muted-foreground/50"
+                                        )}
+                                    >
+                                        <div className="font-medium text-sm">Proven Only</div>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Use our battle-tested scripts</p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setConfig((prev) => ({ ...prev, promptMode: "combined", addToExisting: true }))}
+                                        disabled={isFetchingPrompt}
+                                        className={cn(
+                                            "p-3 rounded-lg border-2 text-left transition-all",
+                                            config.promptMode === "combined"
+                                                ? "bg-primary/10 border-primary"
+                                                : "bg-card border-border hover:border-muted-foreground/50"
+                                        )}
+                                    >
+                                        <div className="font-medium text-sm">Combined</div>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Your scripts + proven patterns</p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setConfig((prev) => ({ ...prev, promptMode: "custom", addToExisting: false }))}
+                                        disabled={isFetchingPrompt}
+                                        className={cn(
+                                            "p-3 rounded-lg border-2 text-left transition-all",
+                                            config.promptMode === "custom"
+                                                ? "bg-primary/10 border-primary"
+                                                : "bg-card border-border hover:border-muted-foreground/50"
+                                        )}
+                                    >
+                                        <div className="font-medium text-sm">Custom Only</div>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Full control with your scripts</p>
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Keyword Sequence - Distinct section for keyword triggers */}
