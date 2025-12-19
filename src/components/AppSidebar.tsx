@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, MessageCircle, FileText, Settings, LogOut, ChevronDown, Plus, Send } from "lucide-react";
+import { LayoutDashboard, MessageCircle, FileText, Settings, LogOut, ChevronDown, Plus, Send, Moon, Sun } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/context/ThemeContext";
 import logo from "@/assets/logo.svg";
 import {
     DropdownMenu,
@@ -31,6 +32,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ className }: AppSidebarProps) {
     const { user, workspaces, activeWorkspaceId, switchWorkspace, redirectToLogin, logout } = useAuth();
+    const { resolvedTheme, toggleTheme } = useTheme();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     // Get display info based on user type
@@ -143,8 +145,20 @@ export function AppSidebar({ className }: AppSidebarProps) {
                 ))}
             </nav>
 
-            {/* Logout */}
-            <div className="border-t border-sidebar-border p-3">
+            {/* Theme Toggle & Logout */}
+            <div className="border-t border-sidebar-border p-3 space-y-1">
+                <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    onClick={toggleTheme}
+                    aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+                >
+                    <div className="relative h-4 w-4">
+                        <Sun className={cn("h-4 w-4 absolute inset-0 transition-all duration-300", resolvedTheme === "dark" ? "rotate-0 scale-100 opacity-100" : "rotate-90 scale-0 opacity-0")} />
+                        <Moon className={cn("h-4 w-4 absolute inset-0 transition-all duration-300", resolvedTheme === "dark" ? "-rotate-90 scale-0 opacity-0" : "rotate-0 scale-100 opacity-100")} />
+                    </div>
+                    {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
+                </button>
                 <button
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:opacity-70"
                     onClick={handleLogout}

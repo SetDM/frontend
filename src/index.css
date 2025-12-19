@@ -1,128 +1,173 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 240 20% 98%;
-    --foreground: 230 25% 15%;
+    :root {
+        --background: 240 20% 98%;
+        --foreground: 230 25% 15%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 230 25% 15%;
+        --card: 0 0% 100%;
+        --card-foreground: 230 25% 15%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 230 25% 15%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 230 25% 15%;
 
-    --primary: 235 89% 68%;
-    --primary-foreground: 0 0% 100%;
+        --primary: 235 89% 68%;
+        --primary-foreground: 0 0% 100%;
 
-    --secondary: 230 25% 95%;
-    --secondary-foreground: 230 25% 25%;
+        --secondary: 230 25% 95%;
+        --secondary-foreground: 230 25% 25%;
 
-    --muted: 230 20% 94%;
-    --muted-foreground: 230 15% 50%;
+        --muted: 230 20% 94%;
+        --muted-foreground: 230 15% 50%;
 
-    --accent: 235 89% 68%;
-    --accent-foreground: 0 0% 100%;
+        --accent: 235 89% 68%;
+        --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 100%;
 
-    --border: 230 20% 90%;
-    --input: 230 20% 90%;
-    --ring: 235 89% 68%;
+        --border: 230 20% 90%;
+        --input: 230 20% 90%;
+        --ring: 235 89% 68%;
 
-    --radius: 0.875rem;
+        --radius: 0.875rem;
 
-    /* Funnel stage colors */
-    --stage-responded: 230 15% 70%;
-    --stage-lead: 217 91% 60%;
-    --stage-qualified: 270 70% 60%;
-    --stage-booking-sent: 35 95% 60%;
-    --stage-call-booked: 25 95% 55%;
-    --stage-sale: 142 70% 45%;
-    --stage-ignored: 230 10% 60%;
-    --stage-unread: 330 85% 60%;
+        /* Funnel stage colors */
+        --stage-responded: 230 15% 70%;
+        --stage-lead: 217 91% 60%;
+        --stage-qualified: 270 70% 60%;
+        --stage-booking-sent: 35 95% 60%;
+        --stage-call-booked: 25 95% 55%;
+        --stage-sale: 142 70% 45%;
+        --stage-ignored: 230 10% 60%;
+        --stage-unread: 330 85% 60%;
 
-    /* Additional accents */
-    --pink-accent: 330 85% 60%;
-    --pink-accent-foreground: 0 0% 100%;
+        /* Additional accents */
+        --pink-accent: 330 85% 60%;
+        --pink-accent-foreground: 0 0% 100%;
 
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(230 25% 15% / 0.03);
-    --shadow-card: 0 2px 8px -2px hsl(230 25% 15% / 0.08), 0 4px 16px -4px hsl(230 25% 15% / 0.04);
-    --shadow-lg: 0 8px 24px -8px hsl(230 25% 15% / 0.12);
+        /* Shadows */
+        --shadow-sm: 0 1px 2px 0 hsl(230 25% 15% / 0.03);
+        --shadow-card: 0 2px 8px -2px hsl(230 25% 15% / 0.08), 0 4px 16px -4px hsl(230 25% 15% / 0.04);
+        --shadow-lg: 0 8px 24px -8px hsl(230 25% 15% / 0.12);
 
-    /* Sidebar */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 230 25% 35%;
-    --sidebar-primary: 235 89% 68%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 235 89% 95%;
-    --sidebar-accent-foreground: 235 89% 50%;
-    --sidebar-border: 230 20% 92%;
-    --sidebar-ring: 235 89% 68%;
-  }
+        /* Sidebar */
+        --sidebar-background: 0 0% 100%;
+        --sidebar-foreground: 230 25% 35%;
+        --sidebar-primary: 235 89% 68%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 235 89% 95%;
+        --sidebar-accent-foreground: 235 89% 50%;
+        --sidebar-border: 230 20% 92%;
+        --sidebar-ring: 235 89% 68%;
+    }
 
-  .dark {
-    --background: 230 25% 10%;
-    --foreground: 0 0% 95%;
+    .dark {
+        --background: 228 20% 8%;
+        --foreground: 220 15% 94%;
 
-    --card: 230 25% 14%;
-    --card-foreground: 0 0% 95%;
+        --card: 228 22% 11%;
+        --card-foreground: 220 15% 94%;
 
-    --popover: 230 25% 14%;
-    --popover-foreground: 0 0% 95%;
+        --popover: 228 22% 11%;
+        --popover-foreground: 220 15% 94%;
 
-    --primary: 235 89% 68%;
-    --primary-foreground: 0 0% 100%;
+        --primary: 235 85% 65%;
+        --primary-foreground: 0 0% 100%;
 
-    --secondary: 230 20% 20%;
-    --secondary-foreground: 0 0% 90%;
+        --secondary: 228 18% 16%;
+        --secondary-foreground: 220 12% 85%;
 
-    --muted: 230 20% 18%;
-    --muted-foreground: 230 15% 60%;
+        --muted: 228 18% 14%;
+        --muted-foreground: 220 10% 55%;
 
-    --accent: 235 89% 68%;
-    --accent-foreground: 0 0% 100%;
+        --accent: 235 85% 65%;
+        --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 100%;
+        --destructive: 0 72% 55%;
+        --destructive-foreground: 0 0% 100%;
 
-    --border: 230 20% 20%;
-    --input: 230 20% 20%;
-    --ring: 235 89% 68%;
+        --border: 228 18% 18%;
+        --input: 228 18% 16%;
+        --ring: 235 85% 65%;
 
-    --sidebar-background: 230 25% 12%;
-    --sidebar-foreground: 230 15% 70%;
-    --sidebar-primary: 235 89% 68%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 235 50% 20%;
-    --sidebar-accent-foreground: 235 89% 75%;
-    --sidebar-border: 230 20% 18%;
-    --sidebar-ring: 235 89% 68%;
-  }
+        /* Dark mode shadows - subtle glow effect */
+        --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
+        --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.4), 0 0 0 1px hsl(228 18% 18%);
+        --shadow-lg: 0 8px 24px -8px hsl(0 0% 0% / 0.5);
+
+        /* Sidebar - slightly elevated from background */
+        --sidebar-background: 228 22% 10%;
+        --sidebar-foreground: 220 12% 72%;
+        --sidebar-primary: 235 85% 65%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 235 45% 22%;
+        --sidebar-accent-foreground: 235 80% 78%;
+        --sidebar-border: 228 18% 16%;
+        --sidebar-ring: 235 85% 65%;
+
+        /* Funnel stage colors - slightly brighter for dark mode visibility */
+        --stage-responded: 220 12% 60%;
+        --stage-lead: 217 85% 62%;
+        --stage-qualified: 270 65% 62%;
+        --stage-booking-sent: 35 90% 58%;
+        --stage-call-booked: 25 90% 55%;
+        --stage-sale: 142 65% 48%;
+        --stage-ignored: 220 8% 55%;
+        --stage-unread: 330 80% 62%;
+
+        /* Pink accent for dark mode */
+        --pink-accent: 330 80% 62%;
+        --pink-accent-foreground: 0 0% 100%;
+    }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+    * {
+        @apply border-border;
+    }
 
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
-  }
+    html {
+        color-scheme: light;
+    }
+
+    html.dark {
+        color-scheme: dark;
+    }
+
+    body {
+        @apply bg-background text-foreground font-sans antialiased;
+        font-family: "Inter", system-ui, sans-serif;
+    }
+
+    /* Smooth theme transitions */
+    *,
+    *::before,
+    *::after {
+        transition-property: background-color, border-color, box-shadow;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 150ms;
+    }
+
+    /* Exclude transitions on elements that shouldn't animate */
+    [data-no-theme-transition],
+    [data-no-theme-transition] *,
+    .no-theme-transition,
+    .no-theme-transition * {
+        transition-property: none !important;
+    }
 }
 
 @layer utilities {
-  .shadow-card {
-    box-shadow: var(--shadow-card);
-  }
-  
-  .shadow-card-lg {
-    box-shadow: var(--shadow-lg);
-  }
+    .shadow-card {
+        box-shadow: var(--shadow-card);
+    }
+
+    .shadow-card-lg {
+        box-shadow: var(--shadow-lg);
+    }
 }

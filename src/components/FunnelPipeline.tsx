@@ -301,11 +301,10 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                     width={pillWidth}
                                     height={pillHeight}
                                     rx={pillHeight / 2}
-                                    fill="hsla(210, 20%, 20%, 0.9)"
-                                    stroke="hsla(210, 30%, 40%, 0.5)"
+                                    className="fill-card stroke-border"
                                     strokeWidth="2"
                                 />
-                                <text x={xPos} y={centerY + 5} textAnchor="middle" fill="white" fontSize="14" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif">
+                                <text x={xPos} y={centerY + 5} textAnchor="middle" className="fill-foreground" fontSize="14" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif">
                                     {percent}
                                 </text>
                             </g>
