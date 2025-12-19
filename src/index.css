@@ -67,23 +67,23 @@
     }
 
     .dark {
-        --background: 228 20% 8%;
+        --background: 225 18% 11%;
         --foreground: 220 10% 98%;
 
-        --card: 228 22% 11%;
+        --card: 225 18% 14%;
         --card-foreground: 220 10% 98%;
 
-        --popover: 228 22% 11%;
+        --popover: 225 18% 14%;
         --popover-foreground: 220 10% 98%;
 
         --primary: 235 85% 65%;
         --primary-foreground: 0 0% 100%;
 
-        --secondary: 228 18% 16%;
+        --secondary: 225 15% 20%;
         --secondary-foreground: 220 10% 92%;
 
-        --muted: 228 18% 14%;
-        --muted-foreground: 220 8% 65%;
+        --muted: 225 15% 18%;
+        --muted-foreground: 220 8% 68%;
 
         --accent: 235 85% 65%;
         --accent-foreground: 0 0% 100%;
@@ -91,23 +91,23 @@
         --destructive: 0 72% 55%;
         --destructive-foreground: 0 0% 100%;
 
-        --border: 228 15% 22%;
-        --input: 228 18% 18%;
+        --border: 225 12% 25%;
+        --input: 225 15% 22%;
         --ring: 235 85% 65%;
 
         /* Dark mode shadows - subtle glow effect */
-        --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
-        --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.4), 0 0 0 1px hsl(228 15% 20%);
-        --shadow-lg: 0 8px 24px -8px hsl(0 0% 0% / 0.5);
+        --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.25);
+        --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.3), 0 0 0 1px hsl(225 12% 22%);
+        --shadow-lg: 0 8px 24px -8px hsl(0 0% 0% / 0.4);
 
         /* Sidebar - slightly elevated from background */
-        --sidebar-background: 228 22% 10%;
-        --sidebar-foreground: 220 8% 82%;
+        --sidebar-background: 225 18% 12%;
+        --sidebar-foreground: 220 8% 85%;
         --sidebar-primary: 235 85% 65%;
         --sidebar-primary-foreground: 0 0% 100%;
-        --sidebar-accent: 235 45% 22%;
-        --sidebar-accent-foreground: 235 75% 85%;
-        --sidebar-border: 228 15% 20%;
+        --sidebar-accent: 235 40% 28%;
+        --sidebar-accent-foreground: 235 75% 88%;
+        --sidebar-border: 225 12% 22%;
         --sidebar-ring: 235 85% 65%;
 
         /* Funnel stage colors - slightly brighter for dark mode visibility */
