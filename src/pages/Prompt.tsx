@@ -991,9 +991,7 @@ export default function Prompt() {
                                         disabled={isFetchingPrompt}
                                         className={cn(
                                             "p-3 rounded-lg border-2 text-left transition-all",
-                                            config.promptMode === "system"
-                                                ? "bg-primary/10 border-primary"
-                                                : "bg-card border-border hover:border-muted-foreground/50"
+                                            config.promptMode === "system" ? "bg-primary/10 border-primary" : "bg-card border-border hover:border-muted-foreground/50"
                                         )}
                                     >
                                         <div className="font-medium text-sm">Proven Only</div>
@@ -1005,9 +1003,7 @@ export default function Prompt() {
                                         disabled={isFetchingPrompt}
                                         className={cn(
                                             "p-3 rounded-lg border-2 text-left transition-all",
-                                            config.promptMode === "combined"
-                                                ? "bg-primary/10 border-primary"
-                                                : "bg-card border-border hover:border-muted-foreground/50"
+                                            config.promptMode === "combined" ? "bg-primary/10 border-primary" : "bg-card border-border hover:border-muted-foreground/50"
                                         )}
                                     >
                                         <div className="font-medium text-sm">Combined</div>
@@ -1019,9 +1015,7 @@ export default function Prompt() {
                                         disabled={isFetchingPrompt}
                                         className={cn(
                                             "p-3 rounded-lg border-2 text-left transition-all",
-                                            config.promptMode === "custom"
-                                                ? "bg-primary/10 border-primary"
-                                                : "bg-card border-border hover:border-muted-foreground/50"
+                                            config.promptMode === "custom" ? "bg-primary/10 border-primary" : "bg-card border-border hover:border-muted-foreground/50"
                                         )}
                                     >
                                         <div className="font-medium text-sm">Custom Only</div>

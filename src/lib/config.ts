@@ -1,4 +1,4 @@
-export const BACKEND_URL = "https://backend-5shk.onrender.com";
+export const BACKEND_URL = "https://backend-p1hl.onrender.com";
 export const API_BASE_URL = `${BACKEND_URL}/api`;
 
 export const AUTH_ENDPOINTS = {
