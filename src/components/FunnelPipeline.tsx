@@ -1,18 +1,44 @@
 import { FunnelData } from "@/types";
-import { MessageSquare } from "lucide-react";
+import { Info, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface FunnelPipelineProps {
     data: FunnelData;
 }
 
 const stages = [
-    { key: "responded" as const, label: "Total Responded", filter: "responded" },
-    { key: "lead" as const, label: "Lead", filter: "lead" },
-    { key: "qualified" as const, label: "Qualified", filter: "qualified" },
-    { key: "callBooked" as const, label: "Call Booked", filter: "call-booked" },
-    { key: "sale" as const, label: "Sales", filter: "sale" },
+    { 
+        key: "responded" as const, 
+        label: "Total Responded", 
+        filter: "responded",
+        description: "Total prospects who have replied to your DMs at least once"
+    },
+    { 
+        key: "lead" as const, 
+        label: "Total Leads", 
+        filter: "lead",
+        description: "Prospects showing interest and engaging in conversation"
+    },
+    { 
+        key: "qualified" as const, 
+        label: "Total Qualified", 
+        filter: "qualified",
+        description: "Prospects who meet your criteria and are ready to be pitched"
+    },
+    { 
+        key: "callBooked" as const, 
+        label: "Total Calls Booked", 
+        filter: "call-booked",
+        description: "Prospects who have scheduled a call with you"
+    },
+    { 
+        key: "sale" as const, 
+        label: "Total Sales", 
+        filter: "sale",
+        description: "Prospects who have converted into paying customers"
+    },
 ];
 
 type StageKey = (typeof stages)[number]["key"];
@@ -32,17 +58,18 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
         navigate(`/messages?stage=${filter}`);
     };
 
-    // Display values - just use the raw data from backend (already cumulative)
+    // Backend sends counts for each stage separately (not cumulative)
+    // We need cumulative totals: everyone who REACHED that stage or beyond
     const displayValues = {
-        responded: data.responded,
-        lead: data.lead,
-        qualified: data.qualified,
-        callBooked: data.callBooked,
+        responded: data.responded + data.lead + data.qualified + data.callBooked + data.sale,
+        lead: data.lead + data.qualified + data.callBooked + data.sale,
+        qualified: data.qualified + data.callBooked + data.sale,
+        callBooked: data.callBooked + data.sale,
         sale: data.sale,
     };
 
-    // For funnel shape, use the values directly
-    const maxValue = Math.max(data.responded, 1);
+    // For funnel shape, use total responded as the max
+    const maxValue = Math.max(displayValues.responded, 1);
 
     // Calculate stage-to-stage conversion percentages
     const getConversionPercent = (current: number, previous: number) => {
@@ -202,7 +229,19 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                     const value = displayValues[stage.key];
                     return (
                         <div key={stage.key} className="flex flex-col items-center text-center">
-                            <span className="text-xs font-medium text-muted-foreground mb-1">{stage.label}</span>
+                            <div className="flex items-center gap-1 mb-1">
+                                <span className="text-xs font-medium text-muted-foreground">{stage.label}</span>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
+                                            <Info className="h-3 w-3" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-[200px] text-center">
+                                        <p className="text-xs">{stage.description}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
                             <span className="text-2xl font-bold text-foreground mb-3">{value}</span>
                             <button
                                 onClick={() => handleStageClick(stage.filter)}
@@ -245,7 +284,19 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
                                 className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 text-left transition-colors hover:border-border hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                             >
                                 <div className="flex flex-col">
-                                    <span className="text-sm font-semibold text-foreground">{stage.label}</span>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-sm font-semibold text-foreground">{stage.label}</span>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="text-muted-foreground/60">
+                                                    <Info className="h-3 w-3" />
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" className="max-w-[200px] text-center">
+                                                <p className="text-xs">{stage.description}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </div>
                                     <span className="text-xs text-muted-foreground">{conversions[stage.key]} conversion</span>
                                 </div>
                                 <span className="text-xl font-bold text-foreground">{displayValues[stage.key]}</span>
