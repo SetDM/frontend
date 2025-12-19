@@ -71,19 +71,19 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
     // For funnel shape, use total responded as the max
     const maxValue = Math.max(data.responded, 1);
 
-    // Calculate stage-to-stage conversion percentages
-    const getConversionPercent = (current: number, previous: number) => {
-        if (previous === 0) return "0%";
-        const percent = (current / previous) * 100;
-        return percent.toFixed(percent >= 100 ? 0 : 2).replace(/\.?0+$/, "") + "%";
+    // Calculate percentages relative to total responded
+    const getPercent = (value: number) => {
+        if (displayValues.responded === 0) return "0%";
+        const percent = (value / displayValues.responded) * 100;
+        return percent.toFixed(percent >= 100 || percent === Math.floor(percent) ? 0 : 1) + "%";
     };
 
     const conversions: Record<StageKey, string> = {
         responded: "100%",
-        lead: getConversionPercent(displayValues.lead, displayValues.responded),
-        qualified: getConversionPercent(displayValues.qualified, displayValues.lead),
-        callBooked: getConversionPercent(displayValues.callBooked, displayValues.qualified),
-        sale: getConversionPercent(displayValues.sale, displayValues.callBooked),
+        lead: getPercent(displayValues.lead),
+        qualified: getPercent(displayValues.qualified),
+        callBooked: getPercent(displayValues.callBooked),
+        sale: getPercent(displayValues.sale),
     };
 
     // Calculate heights as percentage of responded - these will drive the funnel shape
