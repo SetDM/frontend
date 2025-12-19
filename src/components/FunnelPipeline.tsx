@@ -9,35 +9,35 @@ interface FunnelPipelineProps {
 }
 
 const stages = [
-    { 
-        key: "responded" as const, 
-        label: "Total Responded", 
+    {
+        key: "responded" as const,
+        label: "Total Responded",
         filter: "responded",
-        description: "Total prospects who have replied to your DMs at least once"
+        description: "Total prospects who have replied to your DMs at least once",
     },
-    { 
-        key: "lead" as const, 
-        label: "Total Leads", 
+    {
+        key: "lead" as const,
+        label: "Total Leads",
         filter: "lead",
-        description: "Prospects showing interest and engaging in conversation"
+        description: "Prospects showing interest and engaging in conversation",
     },
-    { 
-        key: "qualified" as const, 
-        label: "Total Qualified", 
+    {
+        key: "qualified" as const,
+        label: "Total Qualified",
         filter: "qualified",
-        description: "Prospects who meet your criteria and are ready to be pitched"
+        description: "Prospects who meet your criteria and are ready to be pitched",
     },
-    { 
-        key: "callBooked" as const, 
-        label: "Total Calls Booked", 
+    {
+        key: "callBooked" as const,
+        label: "Total Calls Booked",
         filter: "call-booked",
-        description: "Prospects who have scheduled a call with you"
+        description: "Prospects who have scheduled a call with you",
     },
-    { 
-        key: "sale" as const, 
-        label: "Total Sales", 
+    {
+        key: "sale" as const,
+        label: "Total Sales",
         filter: "sale",
-        description: "Prospects who have converted into paying customers"
+        description: "Prospects who have converted into paying customers",
     },
 ];
 
@@ -58,18 +58,18 @@ export function FunnelPipeline({ data }: FunnelPipelineProps) {
         navigate(`/messages?stage=${filter}`);
     };
 
-    // Backend sends counts for each stage separately (not cumulative)
-    // We need cumulative totals: everyone who REACHED that stage or beyond
+    // Backend already provides the correct totals for each stage
+    // Just use the raw values directly
     const displayValues = {
-        responded: data.responded + data.lead + data.qualified + data.callBooked + data.sale,
-        lead: data.lead + data.qualified + data.callBooked + data.sale,
-        qualified: data.qualified + data.callBooked + data.sale,
-        callBooked: data.callBooked + data.sale,
+        responded: data.responded,
+        lead: data.lead,
+        qualified: data.qualified,
+        callBooked: data.callBooked,
         sale: data.sale,
     };
 
     // For funnel shape, use total responded as the max
-    const maxValue = Math.max(displayValues.responded, 1);
+    const maxValue = Math.max(data.responded, 1);
 
     // Calculate stage-to-stage conversion percentages
     const getConversionPercent = (current: number, previous: number) => {
