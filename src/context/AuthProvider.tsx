@@ -273,6 +273,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
         }
 
+        // On mobile, try to prevent Instagram app from intercepting
+        // Using an anchor with noreferrer can sometimes bypass app deep-linking
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
+        if (isMobile) {
+            const anchor = document.createElement("a");
+            anchor.href = loginUrl;
+            anchor.rel = "noreferrer noopener";
+            anchor.style.display = "none";
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            return;
+        }
+
         window.location.href = loginUrl;
     }, []);
 
