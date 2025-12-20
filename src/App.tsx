@@ -9,8 +9,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Messages from "./pages/Messages";
-import ColdOutreach from "./pages/ColdOutreach";
-import ColdOutreachStats from "./pages/ColdOutreachStats";
+// import ColdOutreach from "./pages/ColdOutreach";
+// import ColdOutreachStats from "./pages/ColdOutreachStats";
 import Prompt from "./pages/Prompt";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -43,8 +43,9 @@ const App = () => (
                                 <Route element={<ProtectedRoute />}>
                                     <Route path="/" element={<Dashboard />} />
                                     <Route path="/messages" element={<Messages />} />
-                                    <Route path="/cold-outreach" element={<ColdOutreach />} />
-                                    <Route path="/cold-outreach/stats" element={<ColdOutreachStats />} />
+                                    {/* Cold Outreach hidden for now */}
+                                    {/* <Route path="/cold-outreach" element={<ColdOutreach />} /> */}
+                                    {/* <Route path="/cold-outreach/stats" element={<ColdOutreachStats />} /> */}
                                     <Route path="/prompt" element={<Prompt />} />
                                     <Route path="/settings" element={<Settings />} />
                                     <Route path="*" element={<NotFound />} />

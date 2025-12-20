@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, MessageCircle, FileText, Settings, LogOut, ChevronDown, Plus, Send, Moon, Sun } from "lucide-react";
+import { LayoutDashboard, MessageCircle, FileText, Settings, LogOut, ChevronDown, Plus, Moon, Sun } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/context/ThemeContext";
@@ -21,7 +21,7 @@ import { isTeamMember } from "@/types";
 const navItems = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard },
     { title: "Messages", url: "/messages", icon: MessageCircle },
-    { title: "Cold Outreach", url: "/cold-outreach", icon: Send },
+    // { title: "Cold Outreach", url: "/cold-outreach", icon: Send }, // Hidden for now
     { title: "Prompt", url: "/prompt", icon: FileText },
     { title: "Settings", url: "/settings", icon: Settings },
 ];
