@@ -250,9 +250,25 @@ export function ProspectPanel({
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Lead Score</span>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold text-foreground">{prospect.leadScore}</span>
+            <span className={cn(
+              "text-2xl font-bold",
+              prospect.leadScore >= 70 ? "text-green-500" :
+              prospect.leadScore >= 40 ? "text-yellow-500" :
+              "text-red-500"
+            )}>{prospect.leadScore}</span>
             <span className="text-sm text-muted-foreground">/100</span>
           </div>
+        </div>
+        <div className="mt-2 h-2 w-full rounded-full bg-muted overflow-hidden">
+          <div 
+            className={cn(
+              "h-full rounded-full transition-all",
+              prospect.leadScore >= 70 ? "bg-green-500" :
+              prospect.leadScore >= 40 ? "bg-yellow-500" :
+              "bg-red-500"
+            )}
+            style={{ width: `${prospect.leadScore}%` }}
+          />
         </div>
       </div>
 

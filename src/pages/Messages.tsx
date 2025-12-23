@@ -90,6 +90,69 @@ const extractNotesFromPayload = (payload: unknown): string[] => {
     .filter((note): note is string => Boolean(note));
 };
 
+/**
+ * Calculate lead score based on available prospect data
+ * Score ranges from 0-100
+ */
+const calculateLeadScore = ({
+  stage,
+  followerCount,
+  isUserFollowBusiness,
+  messageCount,
+  lastActivityMs,
+}: {
+  stage: FunnelStage;
+  followerCount: number | null;
+  isUserFollowBusiness: boolean | null;
+  messageCount: number;
+  lastActivityMs: number;
+}): number => {
+  let score = 0;
+
+  // Stage progression (0-40 points)
+  const stageScores: Record<FunnelStage, number> = {
+    responded: 5,
+    lead: 15,
+    qualified: 25,
+    "booking-sent": 32,
+    "call-booked": 40,
+    sale: 40,
+    flagged: 0,
+  };
+  score += stageScores[stage] ?? 0;
+
+  // Follower count (0-25 points)
+  if (followerCount !== null && followerCount > 0) {
+    if (followerCount >= 100000) score += 25;
+    else if (followerCount >= 50000) score += 22;
+    else if (followerCount >= 10000) score += 18;
+    else if (followerCount >= 5000) score += 15;
+    else if (followerCount >= 1000) score += 10;
+    else if (followerCount >= 500) score += 6;
+    else score += 3;
+  }
+
+  // Follows the business (0-10 points)
+  if (isUserFollowBusiness === true) {
+    score += 10;
+  }
+
+  // Message engagement (0-15 points)
+  if (messageCount >= 20) score += 15;
+  else if (messageCount >= 10) score += 12;
+  else if (messageCount >= 5) score += 8;
+  else if (messageCount >= 2) score += 4;
+
+  // Recent activity (0-10 points)
+  const hoursSinceActivity = lastActivityMs / (1000 * 60 * 60);
+  if (hoursSinceActivity <= 1) score += 10;
+  else if (hoursSinceActivity <= 6) score += 8;
+  else if (hoursSinceActivity <= 24) score += 5;
+  else if (hoursSinceActivity <= 72) score += 2;
+
+  return Math.min(100, Math.max(0, score));
+};
+
 const formatRelativeTime = (input?: string | number | Date) => {
   const date = coerceDate(input);
   if (!date) {
@@ -396,6 +459,19 @@ const buildProspectFromRecord = (
     typeof record.isAutopilotOn === "boolean" ? record.isAutopilotOn : false;
   const { stage: resolvedStage, isFlagged } = resolveProspectStage(record);
 
+  // Calculate last activity time for lead score
+  const lastActivityDate = coerceDate(record.lastUpdated ?? fallbackTimestamp);
+  const lastActivityMs = lastActivityDate ? Date.now() - lastActivityDate.getTime() : 0;
+
+  // Calculate lead score
+  const leadScore = calculateLeadScore({
+    stage: resolvedStage,
+    followerCount,
+    isUserFollowBusiness: profile?.isUserFollowBusiness ?? null,
+    messageCount: messages.length,
+    lastActivityMs,
+  });
+
   return {
     id: conversationId,
     instagramId,
@@ -408,7 +484,7 @@ const buildProspectFromRecord = (
     followers: followerCount ?? 0,
     followerCount,
     following: 0,
-    leadScore: 0,
+    leadScore,
     autopilotEnabled: autopilotEnabledFromRecord,
     isFlagged,
     isUserFollowBusiness: profile?.isUserFollowBusiness ?? null,
