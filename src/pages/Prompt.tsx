@@ -375,7 +375,19 @@ interface KeywordSequenceSectionProps {
     disabled?: boolean;
 }
 
-function KeywordSequenceSection({ isOpen, onToggle, keywords, onKeywordsChange, keywordPhrases, onKeywordPhrasesChange, initialMessage, onInitialMessageChange, followups, onFollowupsChange, disabled }: KeywordSequenceSectionProps) {
+function KeywordSequenceSection({
+    isOpen,
+    onToggle,
+    keywords,
+    onKeywordsChange,
+    keywordPhrases,
+    onKeywordPhrasesChange,
+    initialMessage,
+    onInitialMessageChange,
+    followups,
+    onFollowupsChange,
+    disabled,
+}: KeywordSequenceSectionProps) {
     const addFollowup = () => {
         onFollowupsChange([...followups, createFollowup()]);
     };
@@ -1089,7 +1101,9 @@ export default function Prompt() {
                                         className="min-h-[100px] font-mono text-xs sm:text-sm bg-card"
                                         disabled={isFetchingPrompt}
                                     />
-                                    <p className="text-xs text-muted-foreground mt-2">One phrase per line. The AI will check incoming messages against these. If matched, autopilot turns on and sets stage to "responded".</p>
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        One phrase per line. The AI will check incoming messages against these. If matched, autopilot turns on and sets stage to "responded".
+                                    </p>
                                 </div>
                             </div>
 

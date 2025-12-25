@@ -473,7 +473,6 @@ export default function Settings() {
     // Local state for text inputs (to allow typing without immediate processing)
     const [blockedCountriesText, setBlockedCountriesText] = useState("");
     const [allowedLanguagesText, setAllowedLanguagesText] = useState("");
-    const [triggerExamplesText, setTriggerExamplesText] = useState("");
     const [ignorePatternsText, setIgnorePatternsText] = useState("");
 
     // Sync local text state when settings load
@@ -484,10 +483,6 @@ export default function Settings() {
     useEffect(() => {
         setAllowedLanguagesText(arrayToCommaText(settings.filters.allowedLanguages));
     }, [settings.filters.allowedLanguages]);
-
-    useEffect(() => {
-        setTriggerExamplesText(arrayToText(settings.entryPoints.triggerExamples));
-    }, [settings.entryPoints.triggerExamples]);
 
     useEffect(() => {
         setIgnorePatternsText(arrayToText(settings.ignoreRules.ignorePatterns));
@@ -745,19 +740,6 @@ export default function Settings() {
                                 <p className="text-xs text-muted-foreground mt-1.5">Configure your keyword triggers in the Prompt section.</p>
                             </div>
 
-                            <div>
-                                <Label htmlFor="trigger-examples">Other Trigger Messages</Label>
-                                <Textarea
-                                    id="trigger-examples"
-                                    value={triggerExamplesText}
-                                    onChange={(e) => setTriggerExamplesText(e.target.value)}
-                                    onBlur={(e) => updateEntryPoints({ triggerExamples: textToArray(e.target.value) })}
-                                    placeholder="im fat&#10;how can i get like you&#10;i need help losing weight"
-                                    className="mt-1.5 min-h-[100px]"
-                                    disabled={isLoadingSettings}
-                                />
-                                <p className="text-xs text-muted-foreground mt-1">One per line. AI engages when messages match these patterns.</p>
-                            </div>
                         </div>
                     </div>
 
