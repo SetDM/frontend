@@ -114,7 +114,7 @@ const DEFAULT_KEYWORD_SEQUENCE: KeywordSequenceData = {
 const DEFAULT_CONFIG: PromptConfig = {
     coachName: "Ayden",
     addToExisting: true, // Keep for backward compatibility
-    promptMode: "custom", // Default to custom
+    promptMode: "system", // Default to proven scripts for new accounts
     coachingDetails: "",
     styleNotes: "",
     objectionHandlers: [{ id: crypto.randomUUID(), objection: "", response: "" }],
@@ -703,12 +703,12 @@ export default function Prompt() {
 
                 if (payload.config) {
                     // Determine promptMode from existing data (backward compatibility)
-                    // Treat "combined" as "custom" since we removed combined mode
-                    let promptMode: PromptMode = "custom";
-                    if (payload.config?.promptMode === "system") {
-                        promptMode = "system";
-                    } else if (payload.config?.promptMode === "custom" || payload.config?.promptMode === "combined") {
+                    // Default to "system" (proven scripts) for new accounts
+                    let promptMode: PromptMode = "system";
+                    if (payload.config?.promptMode === "custom" || payload.config?.promptMode === "combined") {
                         promptMode = "custom";
+                    } else if (payload.config?.promptMode === "system") {
+                        promptMode = "system";
                     } else if (payload.config?.addToExisting === false) {
                         promptMode = "custom";
                     }
