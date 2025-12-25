@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { Send, Plus, Sparkles, ChevronLeft, ChevronDown, ChevronUp, Link2, GripVertical, X, MessageSquare, Zap, Info } from "lucide-react";
+import { Send, Plus, Sparkles, ChevronLeft, ChevronDown, ChevronUp, Link2, GripVertical, X, MessageSquare, Zap, Info, Wand2, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -652,6 +653,12 @@ export default function Prompt() {
     // Current stage context for the test chat (affects AI responses)
     const [stageContext, setStageContext] = useState<StageContext>("responded");
 
+    // Generate from Chats dialog state
+    const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+    const [chatTextInput, setChatTextInput] = useState("");
+    const [businessDescInput, setBusinessDescInput] = useState("");
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+
     // Test chat state
     const [testMessages, setTestMessages] = useState<TestMessage[]>(INITIAL_TEST_MESSAGES);
     const [testInput, setTestInput] = useState("");
@@ -799,6 +806,67 @@ export default function Prompt() {
             setIsSaving(false);
         }
     }, [authorizedFetch, config]);
+
+    // Analyze pasted chats and generate sequences
+    const handleAnalyzeChats = async () => {
+        if (!chatTextInput || chatTextInput.trim().length < 50) {
+            toast.error("Please paste at least a few messages from your conversations");
+            return;
+        }
+
+        setIsAnalyzing(true);
+        try {
+            const response = await authorizedFetch(`${PROMPT_ENDPOINTS.user.replace("/user", "/analyze-chats")}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chatText: chatTextInput,
+                    coachName: config.coachName,
+                    businessDescription: businessDescInput,
+                }),
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                throw new Error(payload?.error || "Failed to analyze chats");
+            }
+
+            const result = await response.json();
+            const data = result.data;
+
+            // Update config with generated sequences
+            setConfig((prev) => ({
+                ...prev,
+                coachName: data.coachName || prev.coachName,
+                coachingDetails: data.coachingDetails || prev.coachingDetails,
+                styleNotes: data.styleNotes || prev.styleNotes,
+                sequences: {
+                    ...prev.sequences,
+                    lead: data.sequences?.lead?.script ? { ...prev.sequences.lead, script: data.sequences.lead.script } : prev.sequences.lead,
+                    qualification: data.sequences?.qualification?.script ? { ...prev.sequences.qualification, script: data.sequences.qualification.script } : prev.sequences.qualification,
+                    booking: data.sequences?.booking?.script ? { ...prev.sequences.booking, script: data.sequences.booking.script } : prev.sequences.booking,
+                    callBooked: data.sequences?.callBooked?.script ? { ...prev.sequences.callBooked, script: data.sequences.callBooked.script } : prev.sequences.callBooked,
+                },
+                objectionHandlers: data.objectionHandlers?.length > 0
+                    ? data.objectionHandlers.map((h: { objection: string; response: string }) => ({ id: crypto.randomUUID(), objection: h.objection, response: h.response }))
+                    : prev.objectionHandlers,
+            }));
+
+            toast.success("Sequences generated! Review and save your changes.");
+            setGenerateDialogOpen(false);
+            setChatTextInput("");
+            setBusinessDescInput("");
+
+            // Expand the sequence sections so user can see what was generated
+            setOpenSections(["lead", "qualification", "booking"]);
+            setBehaviorOpen(true);
+        } catch (error) {
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : "Failed to analyze chats");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
 
     const buildHistoryPayload = useCallback(
         (messages: TestMessage[]) =>
@@ -1050,6 +1118,87 @@ export default function Prompt() {
                                         <p className="text-xs text-muted-foreground mt-0.5">Full control with your scripts</p>
                                     </button>
                                 </div>
+
+                                {/* Generate from Chats Button */}
+                                {config.promptMode === "custom" && (
+                                    <Dialog open={generateDialogOpen} onOpenChange={setGenerateDialogOpen}>
+                                        <DialogTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="mt-3 w-full p-3 rounded-lg border-2 border-dashed border-purple-500/50 bg-purple-500/5 hover:bg-purple-500/10 transition-all text-left"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <Wand2 className="h-4 w-4 text-purple-500" />
+                                                    <span className="font-medium text-sm text-purple-600 dark:text-purple-400">Generate from Chats</span>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mt-0.5">Paste your conversations and AI will create your scripts</p>
+                                            </button>
+                                        </DialogTrigger>
+                                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                                            <DialogHeader>
+                                                <DialogTitle className="flex items-center gap-2">
+                                                    <Wand2 className="h-5 w-5 text-purple-500" />
+                                                    Generate Scripts from Your Chats
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    Paste your best sales conversations below. AI will analyze them and create structured scripts that match your style.
+                                                </DialogDescription>
+                                            </DialogHeader>
+
+                                            <div className="space-y-4 mt-4">
+                                                <div>
+                                                    <Label className="text-sm font-medium mb-2 block">What do you do? (optional)</Label>
+                                                    <Input
+                                                        value={businessDescInput}
+                                                        onChange={(e) => setBusinessDescInput(e.target.value)}
+                                                        placeholder="e.g., Online fitness coaching, weight loss programs for busy professionals"
+                                                        disabled={isAnalyzing}
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <Label className="text-sm font-medium mb-2 block">Paste your chat conversations</Label>
+                                                    <Textarea
+                                                        value={chatTextInput}
+                                                        onChange={(e) => setChatTextInput(e.target.value)}
+                                                        placeholder={`Paste multiple conversations here. Example format:
+
+Prospect: Hey I saw your post about weight loss
+Coach: Hey! Thanks for reaching out. What made you interested?
+Prospect: I've been trying to lose weight for months
+Coach: I hear you. What have you tried so far?
+...
+
+You can paste multiple conversations - the more examples, the better the AI can learn your style.`}
+                                                        className="min-h-[250px] font-mono text-xs"
+                                                        disabled={isAnalyzing}
+                                                    />
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        Tip: Include conversations that show how you open, qualify, handle objections, and book calls.
+                                                    </p>
+                                                </div>
+
+                                                <Button
+                                                    onClick={handleAnalyzeChats}
+                                                    disabled={isAnalyzing || chatTextInput.trim().length < 50}
+                                                    className="w-full"
+                                                >
+                                                    {isAnalyzing ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                            Analyzing your conversations...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Sparkles className="h-4 w-4 mr-2" />
+                                                            Generate Scripts
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                )}
                             </div>
 
                             {/* Keyword Sequence - Distinct section for keyword triggers */}
