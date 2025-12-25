@@ -739,7 +739,6 @@ export default function Settings() {
                                 </Button>
                                 <p className="text-xs text-muted-foreground mt-1.5">Configure your keyword triggers in the Prompt section.</p>
                             </div>
-
                         </div>
                     </div>
 
