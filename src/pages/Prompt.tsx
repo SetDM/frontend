@@ -66,7 +66,9 @@ interface SequenceData {
 }
 
 interface KeywordSequenceData {
-    keyword: string;
+    keyword: string; // Keep for backward compat, but prefer keywords
+    keywords: string; // Comma-separated keywords like "CHANGE, FIT, START"
+    keywordPhrases: string; // Phrases that also trigger keyword sequence (one per line)
     initialMessage: string;
     followups: FollowupMessage[];
 }
@@ -82,6 +84,7 @@ interface PromptConfig {
     objectionHandlers: ObjectionHandler[];
     sequences: SequenceData;
     keywordSequence: KeywordSequenceData;
+    activationPhrases: string; // "Turn on if" - phrases that activate AI → responded sequence (one per line)
 }
 
 const createFollowup = (content: string = "", delayValue: string = "1", delayUnit: string = "hours"): FollowupMessage => ({
@@ -100,7 +103,9 @@ const DEFAULT_SEQUENCES: SequenceData = {
 };
 
 const DEFAULT_KEYWORD_SEQUENCE: KeywordSequenceData = {
-    keyword: "",
+    keyword: "", // backward compat
+    keywords: "",
+    keywordPhrases: "",
     initialMessage: "",
     followups: [],
 };
@@ -114,6 +119,7 @@ const DEFAULT_CONFIG: PromptConfig = {
     objectionHandlers: [{ id: crypto.randomUUID(), objection: "", response: "" }],
     sequences: DEFAULT_SEQUENCES,
     keywordSequence: DEFAULT_KEYWORD_SEQUENCE,
+    activationPhrases: "",
 };
 
 const DELAY_UNIT_OPTIONS = ["minutes", "hours"];
@@ -358,8 +364,10 @@ function SequenceSection({ title, description, isOpen, onToggle, script, onScrip
 interface KeywordSequenceSectionProps {
     isOpen: boolean;
     onToggle: () => void;
-    keyword: string;
-    onKeywordChange: (value: string) => void;
+    keywords: string;
+    onKeywordsChange: (value: string) => void;
+    keywordPhrases: string;
+    onKeywordPhrasesChange: (value: string) => void;
     initialMessage: string;
     onInitialMessageChange: (value: string) => void;
     followups: FollowupMessage[];
@@ -367,7 +375,7 @@ interface KeywordSequenceSectionProps {
     disabled?: boolean;
 }
 
-function KeywordSequenceSection({ isOpen, onToggle, keyword, onKeywordChange, initialMessage, onInitialMessageChange, followups, onFollowupsChange, disabled }: KeywordSequenceSectionProps) {
+function KeywordSequenceSection({ isOpen, onToggle, keywords, onKeywordsChange, keywordPhrases, onKeywordPhrasesChange, initialMessage, onInitialMessageChange, followups, onFollowupsChange, disabled }: KeywordSequenceSectionProps) {
     const addFollowup = () => {
         onFollowupsChange([...followups, createFollowup()]);
     };
@@ -425,17 +433,30 @@ function KeywordSequenceSection({ isOpen, onToggle, keyword, onKeywordChange, in
 
             <CollapsibleContent className="mt-2">
                 <div className="p-3 sm:p-4 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-4">
-                    {/* Keyword Input */}
+                    {/* Keywords Input (comma-separated) */}
                     <div>
-                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">Trigger Keyword</Label>
+                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">Trigger Keywords</Label>
                         <Input
-                            value={keyword}
-                            onChange={(e) => onKeywordChange(e.target.value.toUpperCase())}
-                            placeholder="e.g., FIT, COACH, SHREDS"
+                            value={keywords}
+                            onChange={(e) => onKeywordsChange(e.target.value.toUpperCase())}
+                            placeholder="e.g., CHANGE, FIT, START, COACH"
                             className="bg-card uppercase font-semibold text-amber-600"
                             disabled={disabled}
                         />
-                        <p className="text-xs text-muted-foreground mt-1">When a prospect DMs this keyword, this sequence starts</p>
+                        <p className="text-xs text-muted-foreground mt-1">Comma-separated keywords. When a prospect DMs any of these, this sequence starts.</p>
+                    </div>
+
+                    {/* Keyword Phrases (one per line) */}
+                    <div>
+                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">Trigger Phrases</Label>
+                        <Textarea
+                            value={keywordPhrases}
+                            onChange={(e) => onKeywordPhrasesChange(e.target.value)}
+                            placeholder={"e.g., for story replies asking country/age:\nUSA\n25\nCanada\n30"}
+                            className="min-h-[80px] font-mono text-xs sm:text-sm bg-card"
+                            disabled={disabled}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">One phrase per line. Use this for story/reel replies where users respond with their country, age, etc.</p>
                     </div>
 
                     {/* Initial Message Textarea */}
@@ -687,7 +708,13 @@ export default function Prompt() {
                             callBooked: payload.config?.sequences?.callBooked || DEFAULT_SEQUENCES.callBooked,
                             vslLink: payload.config?.sequences?.vslLink || DEFAULT_SEQUENCES.vslLink,
                         },
-                        keywordSequence: payload.config?.keywordSequence || DEFAULT_KEYWORD_SEQUENCE,
+                        keywordSequence: {
+                            ...DEFAULT_KEYWORD_SEQUENCE,
+                            ...payload.config?.keywordSequence,
+                            // Merge keyword into keywords for backward compat
+                            keywords: payload.config?.keywordSequence?.keywords || payload.config?.keywordSequence?.keyword || "",
+                        },
+                        activationPhrases: payload.config?.activationPhrases || "",
                     };
                     setConfig(loadedConfig);
                     // Store original config for change detection
@@ -1033,14 +1060,37 @@ export default function Prompt() {
                                 <KeywordSequenceSection
                                     isOpen={keywordSectionOpen}
                                     onToggle={() => setKeywordSectionOpen(!keywordSectionOpen)}
-                                    keyword={config.keywordSequence.keyword}
-                                    onKeywordChange={(v) => setConfig((prev) => ({ ...prev, keywordSequence: { ...prev.keywordSequence, keyword: v } }))}
+                                    keywords={config.keywordSequence.keywords || config.keywordSequence.keyword || ""}
+                                    onKeywordsChange={(v) => setConfig((prev) => ({ ...prev, keywordSequence: { ...prev.keywordSequence, keywords: v, keyword: v } }))}
+                                    keywordPhrases={config.keywordSequence.keywordPhrases || ""}
+                                    onKeywordPhrasesChange={(v) => setConfig((prev) => ({ ...prev, keywordSequence: { ...prev.keywordSequence, keywordPhrases: v } }))}
                                     initialMessage={config.keywordSequence.initialMessage}
                                     onInitialMessageChange={(v) => setConfig((prev) => ({ ...prev, keywordSequence: { ...prev.keywordSequence, initialMessage: v } }))}
                                     followups={config.keywordSequence.followups}
                                     onFollowupsChange={(f) => setConfig((prev) => ({ ...prev, keywordSequence: { ...prev.keywordSequence, followups: f } }))}
                                     disabled={isFetchingPrompt}
                                 />
+                            </div>
+
+                            {/* ACTIVATION PHRASES / "TURN ON IF" SECTION */}
+                            <div className="rounded-lg bg-card shadow-card overflow-hidden">
+                                <div className="p-4 border-b border-border">
+                                    <h3 className="font-medium text-foreground flex items-center gap-2">
+                                        <div className="h-2 w-2 rounded-full bg-green-500" />
+                                        Turn On AI If...
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground mt-1">AI will activate and start the responded sequence when prospect says something matching these phrases</p>
+                                </div>
+                                <div className="p-4">
+                                    <Textarea
+                                        value={config.activationPhrases || ""}
+                                        onChange={(e) => setConfig((prev) => ({ ...prev, activationPhrases: e.target.value }))}
+                                        placeholder={"e.g., one phrase per line:\nI want to lose weight\nI'm looking for a coach\nI need help with my diet\nI'm fat\nhelp me get in shape"}
+                                        className="min-h-[100px] font-mono text-xs sm:text-sm bg-card"
+                                        disabled={isFetchingPrompt}
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-2">One phrase per line. The AI will check incoming messages against these. If matched, autopilot turns on and sets stage to "responded".</p>
+                                </div>
                             </div>
 
                             <div className="space-y-2 sm:space-y-3">
