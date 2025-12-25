@@ -73,7 +73,7 @@ interface KeywordSequenceData {
     followups: FollowupMessage[];
 }
 
-type PromptMode = "system" | "custom" | "combined";
+type PromptMode = "system" | "custom";
 
 interface PromptConfig {
     coachName: string;
@@ -113,7 +113,7 @@ const DEFAULT_KEYWORD_SEQUENCE: KeywordSequenceData = {
 const DEFAULT_CONFIG: PromptConfig = {
     coachName: "Ayden",
     addToExisting: true, // Keep for backward compatibility
-    promptMode: "combined", // Default to combined
+    promptMode: "custom", // Default to custom
     coachingDetails: "",
     styleNotes: "",
     objectionHandlers: [{ id: crypto.randomUUID(), objection: "", response: "" }],
@@ -696,19 +696,20 @@ export default function Prompt() {
 
                 if (payload.config) {
                     // Determine promptMode from existing data (backward compatibility)
-                    let promptMode: PromptMode = "combined";
-                    if (payload.config?.promptMode) {
-                        promptMode = payload.config.promptMode;
+                    // Treat "combined" as "custom" since we removed combined mode
+                    let promptMode: PromptMode = "custom";
+                    if (payload.config?.promptMode === "system") {
+                        promptMode = "system";
+                    } else if (payload.config?.promptMode === "custom" || payload.config?.promptMode === "combined") {
+                        promptMode = "custom";
                     } else if (payload.config?.addToExisting === false) {
                         promptMode = "custom";
-                    } else if (payload.config?.addToExisting === true) {
-                        promptMode = "combined";
                     }
 
                     const loadedConfig: PromptConfig = {
                         ...DEFAULT_CONFIG,
                         coachName: payload.config?.coachName || DEFAULT_CONFIG.coachName,
-                        addToExisting: promptMode === "combined", // Sync for backward compatibility
+                        addToExisting: false, // Deprecated, always false now
                         promptMode,
                         coachingDetails: payload.config?.coachingDetails || DEFAULT_CONFIG.coachingDetails,
                         styleNotes: payload.config?.styleNotes || DEFAULT_CONFIG.styleNotes,
@@ -1023,7 +1024,7 @@ export default function Prompt() {
                                         </Tooltip>
                                     </TooltipProvider>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <button
                                         type="button"
                                         onClick={() => setConfig((prev) => ({ ...prev, promptMode: "system", addToExisting: false }))}
@@ -1035,18 +1036,6 @@ export default function Prompt() {
                                     >
                                         <div className="font-medium text-sm">Proven Only</div>
                                         <p className="text-xs text-muted-foreground mt-0.5">Use our battle-tested scripts</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setConfig((prev) => ({ ...prev, promptMode: "combined", addToExisting: true }))}
-                                        disabled={isFetchingPrompt}
-                                        className={cn(
-                                            "p-3 rounded-lg border-2 text-left transition-all",
-                                            config.promptMode === "combined" ? "bg-primary/10 border-primary" : "bg-card border-border hover:border-muted-foreground/50"
-                                        )}
-                                    >
-                                        <div className="font-medium text-sm">Combined</div>
-                                        <p className="text-xs text-muted-foreground mt-0.5">Your scripts + proven patterns</p>
                                     </button>
                                     <button
                                         type="button"
