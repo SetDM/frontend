@@ -847,9 +847,10 @@ export default function Prompt() {
                     booking: data.sequences?.booking?.script ? { ...prev.sequences.booking, script: data.sequences.booking.script } : prev.sequences.booking,
                     callBooked: data.sequences?.callBooked?.script ? { ...prev.sequences.callBooked, script: data.sequences.callBooked.script } : prev.sequences.callBooked,
                 },
-                objectionHandlers: data.objectionHandlers?.length > 0
-                    ? data.objectionHandlers.map((h: { objection: string; response: string }) => ({ id: crypto.randomUUID(), objection: h.objection, response: h.response }))
-                    : prev.objectionHandlers,
+                objectionHandlers:
+                    data.objectionHandlers?.length > 0
+                        ? data.objectionHandlers.map((h: { objection: string; response: string }) => ({ id: crypto.randomUUID(), objection: h.objection, response: h.response }))
+                        : prev.objectionHandlers,
             }));
 
             toast.success("Sequences generated! Review and save your changes.");
@@ -1161,28 +1162,18 @@ export default function Prompt() {
                                                     <Textarea
                                                         value={chatTextInput}
                                                         onChange={(e) => setChatTextInput(e.target.value)}
-                                                        placeholder={`Paste multiple conversations here. Example format:
+                                                        placeholder={`Just copy-paste your Instagram DM conversations here.
 
-Prospect: Hey I saw your post about weight loss
-Coach: Hey! Thanks for reaching out. What made you interested?
-Prospect: I've been trying to lose weight for months
-Coach: I hear you. What have you tried so far?
-...
+No need to format them - paste them exactly as they appear. The AI will figure out who's the coach and who's the prospect.
 
-You can paste multiple conversations - the more examples, the better the AI can learn your style.`}
+Paste as many conversations as you want - the more examples, the better the AI can learn your style.`}
                                                         className="min-h-[250px] font-mono text-xs"
                                                         disabled={isAnalyzing}
                                                     />
-                                                    <p className="text-xs text-muted-foreground mt-1">
-                                                        Tip: Include conversations that show how you open, qualify, handle objections, and book calls.
-                                                    </p>
+                                                    <p className="text-xs text-muted-foreground mt-1">Tip: Include conversations that show how you open, qualify, handle objections, and book calls.</p>
                                                 </div>
 
-                                                <Button
-                                                    onClick={handleAnalyzeChats}
-                                                    disabled={isAnalyzing || chatTextInput.trim().length < 50}
-                                                    className="w-full"
-                                                >
+                                                <Button onClick={handleAnalyzeChats} disabled={isAnalyzing || chatTextInput.trim().length < 50} className="w-full">
                                                     {isAnalyzing ? (
                                                         <>
                                                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
