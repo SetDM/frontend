@@ -32,18 +32,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         setUnreadCount((prev) => prev + 1);
     }, []);
 
-    // Handle incoming messages
-    const handleNewMessage = useCallback(
-        (data: { conversationId?: string; message?: { role?: string } }) => {
-            // Only increment for user messages (not AI responses)
-            if (data.message?.role === "user") {
-                incrementUnread();
-            }
-        },
-        [incrementUnread]
-    );
-
     useEffect(() => {
+        // Don't connect if no auth
         if (!authToken || !activeWorkspaceId) {
             if (socketRef.current) {
                 socketRef.current.disconnect();
@@ -53,30 +43,56 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             return;
         }
 
+        // Don't reconnect if already connected with same token
+        if (socketRef.current?.connected) {
+            return;
+        }
+
+        // Disconnect existing socket before creating new one
+        if (socketRef.current) {
+            socketRef.current.disconnect();
+            socketRef.current = null;
+        }
+
         const socket = io(BACKEND_URL, {
             withCredentials: true,
             transports: ["websocket", "polling"],
             auth: { token: authToken },
             extraHeaders: { Authorization: `Bearer ${authToken}` },
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
         });
 
         socketRef.current = socket;
 
-        socket.on("connect", () => setIsConnected(true));
-        socket.on("disconnect", () => setIsConnected(false));
-        socket.on("connect_error", () => setIsConnected(false));
+        const handleConnect = () => setIsConnected(true);
+        const handleDisconnect = () => setIsConnected(false);
+        const handleConnectError = (error: Error) => {
+            console.error("Realtime connection error:", error.message);
+            setIsConnected(false);
+        };
+        const handleNewMessage = (data: { conversationId?: string; message?: { role?: string } }) => {
+            // Only increment for user messages (not AI responses)
+            if (data.message?.role === "user") {
+                setUnreadCount((prev) => prev + 1);
+            }
+        };
+
+        socket.on("connect", handleConnect);
+        socket.on("disconnect", handleDisconnect);
+        socket.on("connect_error", handleConnectError);
         socket.on(REALTIME_EVENTS.MESSAGE_CREATED, handleNewMessage);
 
         return () => {
-            socket.off("connect");
-            socket.off("disconnect");
-            socket.off("connect_error");
+            socket.off("connect", handleConnect);
+            socket.off("disconnect", handleDisconnect);
+            socket.off("connect_error", handleConnectError);
             socket.off(REALTIME_EVENTS.MESSAGE_CREATED, handleNewMessage);
             socket.disconnect();
             socketRef.current = null;
             setIsConnected(false);
         };
-    }, [authToken, activeWorkspaceId, handleNewMessage]);
+    }, [authToken, activeWorkspaceId]);
 
     return (
         <RealtimeContext.Provider value={{ isConnected, unreadCount, clearUnread, incrementUnread }}>
