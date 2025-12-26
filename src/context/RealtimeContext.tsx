@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useAuth } from "@/hooks/useAuth";
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+import { BACKEND_URL } from "@/lib/config";
 
 const REALTIME_EVENTS = {
     MESSAGE_CREATED: "message:created",
