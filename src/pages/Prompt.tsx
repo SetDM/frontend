@@ -639,9 +639,9 @@ export default function Prompt() {
     const [isSaving, setIsSaving] = useState(false);
     const [promptError, setPromptError] = useState<string | null>(null);
 
-    // Track original config to detect unsaved changes
-    const originalConfigRef = useRef<string>("");
-    const hasUnsavedChanges = originalConfigRef.current !== "" && originalConfigRef.current !== JSON.stringify(config);
+    // Track original config to detect unsaved changes (using state for reactivity)
+    const [originalConfigSnapshot, setOriginalConfigSnapshot] = useState<string>("");
+    const hasUnsavedChanges = originalConfigSnapshot !== "" && originalConfigSnapshot !== JSON.stringify(config);
 
     // Sync unsaved changes state with context
     const { setHasUnsavedChanges, setOnSave } = useUnsavedChanges();
@@ -749,7 +749,7 @@ export default function Prompt() {
                     };
                     setConfig(loadedConfig);
                     // Store original config for change detection
-                    originalConfigRef.current = JSON.stringify(loadedConfig);
+                    setOriginalConfigSnapshot(JSON.stringify(loadedConfig));
                 }
             } catch (error) {
                 if (signal?.aborted) {
@@ -834,7 +834,7 @@ export default function Prompt() {
             }
 
             // Update original config after successful save
-            originalConfigRef.current = JSON.stringify(config);
+            setOriginalConfigSnapshot(JSON.stringify(config));
 
             toast.success("Configuration saved!", {
                 position: "top-right",
@@ -1103,10 +1103,26 @@ export default function Prompt() {
                 >
                     {/* Sticky Top Bar with Save Button */}
                     <div className="sticky top-0 z-40 flex items-center justify-between px-3 sm:px-6 py-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                        <h1 className="text-base font-semibold text-foreground sm:text-lg">AI Script</h1>
                         <div className="flex items-center gap-2">
-                            <Button onClick={handleSave} size="sm" className="h-8 px-3" disabled={isSaving || isFetchingPrompt}>
-                                {isSaving ? "Saving…" : "Save changes"}
+                            <h1 className="text-base font-semibold text-foreground sm:text-lg">AI Script</h1>
+                            {hasUnsavedChanges && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                    Unsaved
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button 
+                                onClick={handleSave} 
+                                size="sm" 
+                                className={cn(
+                                    "h-8 px-3",
+                                    hasUnsavedChanges && "bg-amber-500 hover:bg-amber-600 text-white"
+                                )} 
+                                disabled={isSaving || isFetchingPrompt}
+                            >
+                                {isSaving ? "Saving…" : hasUnsavedChanges ? "Save changes" : "Saved"}
                             </Button>
                             {/* Mobile: Button to show preview */}
                             <Button variant="outline" size="sm" className="lg:hidden h-8 px-3" onClick={() => setShowPreview(true)}>
@@ -1563,12 +1579,14 @@ Paste as many conversations as you want - the more examples, the better the AI c
                                             {!message.isUser && !message.isSystem && (
                                                 <div className="absolute -top-3 right-3 flex items-center gap-1">
                                                     {message.triggerType && message.triggerType !== "ai_response" && (
-                                                        <span className={cn(
-                                                            "rounded-full px-2 py-0.5 text-[9px] font-medium shadow-sm",
-                                                            message.triggerType === "keyword" && "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-                                                            message.triggerType === "keyword_phrase" && "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-                                                            message.triggerType === "activation_phrase" && "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"
-                                                        )}>
+                                                        <span
+                                                            className={cn(
+                                                                "rounded-full px-2 py-0.5 text-[9px] font-medium shadow-sm",
+                                                                message.triggerType === "keyword" && "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+                                                                message.triggerType === "keyword_phrase" && "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+                                                                message.triggerType === "activation_phrase" && "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"
+                                                            )}
+                                                        >
                                                             {message.triggerType === "keyword" && `Keyword: ${message.matchedTrigger}`}
                                                             {message.triggerType === "keyword_phrase" && `Phrase match`}
                                                             {message.triggerType === "activation_phrase" && `Activated`}
