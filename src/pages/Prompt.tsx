@@ -38,6 +38,14 @@ interface TestMessage {
     isUser: boolean;
     isSystem?: boolean;
     stageTag?: FunnelStage;
+    triggerType?: "keyword" | "keyword_phrase" | "activation_phrase" | "ai_response";
+    matchedTrigger?: string;
+    followups?: Array<{
+        index: number;
+        content: string;
+        delayValue: string;
+        delayUnit: string;
+    }>;
 }
 
 interface FollowupMessage {
@@ -950,7 +958,14 @@ export default function Prompt() {
                 }),
             });
 
-            const payload = (await response.json().catch(() => null)) as { reply?: string; stageTag?: string; message?: string } | null;
+            const payload = (await response.json().catch(() => null)) as {
+                reply?: string;
+                stageTag?: string;
+                triggerType?: "keyword" | "keyword_phrase" | "activation_phrase" | "ai_response";
+                matchedTrigger?: string;
+                followups?: Array<{ index: number; content: string; delayValue: string; delayUnit: string }>;
+                message?: string;
+            } | null;
 
             if (!response.ok) {
                 const message = payload?.message || "Failed to run prompt test.";
@@ -982,8 +997,10 @@ export default function Prompt() {
                 id: createMessageId(),
                 content: replyText && replyText.length ? replyText : "The AI returned an empty response. Double-check your prompt configuration.",
                 isUser: false,
-                // Use the response stage tag if available, otherwise use current context
                 stageTag: (responseStageTag || stageContext) as FunnelStage,
+                triggerType: payload?.triggerType,
+                matchedTrigger: payload?.matchedTrigger || undefined,
+                followups: payload?.followups,
             };
 
             setTestMessages((prev) => [...prev, aiResponse]);
@@ -1530,24 +1547,61 @@ Paste as many conversations as you want - the more examples, the better the AI c
                                 </div>
                             )}
                             {testMessages.map((message) => (
-                                <div key={message.id} className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}>
-                                    <div
-                                        className={cn(
-                                            "relative max-w-[80%] rounded-2xl px-4 py-2.5",
-                                            message.isUser
-                                                ? "bg-primary text-primary-foreground rounded-br-md"
-                                                : message.isSystem
-                                                ? "bg-muted text-muted-foreground border border-dashed border-border rounded-bl-md"
-                                                : "bg-muted rounded-bl-md"
-                                        )}
-                                    >
-                                        {!message.isSystem && message.stageTag && (
-                                            <div className="absolute -top-3 right-3">
-                                                <StageBadge stage={message.stageTag} className="rounded-full px-2 py-0.5 text-[10px] shadow-sm ring-1 ring-black/5 dark:ring-white/10" />
-                                            </div>
-                                        )}
-                                        <p className={cn("text-sm leading-relaxed", message.isSystem && "italic")}>{message.content}</p>
+                                <div key={message.id} className="space-y-2">
+                                    <div className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}>
+                                        <div
+                                            className={cn(
+                                                "relative max-w-[80%] rounded-2xl px-4 py-2.5",
+                                                message.isUser
+                                                    ? "bg-primary text-primary-foreground rounded-br-md"
+                                                    : message.isSystem
+                                                    ? "bg-muted text-muted-foreground border border-dashed border-border rounded-bl-md"
+                                                    : "bg-muted rounded-bl-md"
+                                            )}
+                                        >
+                                            {/* Stage and trigger badges */}
+                                            {!message.isUser && !message.isSystem && (
+                                                <div className="absolute -top-3 right-3 flex items-center gap-1">
+                                                    {message.triggerType && message.triggerType !== "ai_response" && (
+                                                        <span className={cn(
+                                                            "rounded-full px-2 py-0.5 text-[9px] font-medium shadow-sm",
+                                                            message.triggerType === "keyword" && "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+                                                            message.triggerType === "keyword_phrase" && "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+                                                            message.triggerType === "activation_phrase" && "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"
+                                                        )}>
+                                                            {message.triggerType === "keyword" && `Keyword: ${message.matchedTrigger}`}
+                                                            {message.triggerType === "keyword_phrase" && `Phrase match`}
+                                                            {message.triggerType === "activation_phrase" && `Activated`}
+                                                        </span>
+                                                    )}
+                                                    {message.stageTag && (
+                                                        <StageBadge stage={message.stageTag} className="rounded-full px-2 py-0.5 text-[10px] shadow-sm ring-1 ring-black/5 dark:ring-white/10" />
+                                                    )}
+                                                </div>
+                                            )}
+                                            <p className={cn("text-sm leading-relaxed", message.isSystem && "italic")}>{message.content}</p>
+                                        </div>
                                     </div>
+
+                                    {/* Followups preview */}
+                                    {!message.isUser && message.followups && message.followups.length > 0 && (
+                                        <div className="ml-4 space-y-1.5">
+                                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Scheduled Follow-ups:</p>
+                                            {message.followups.map((followup, idx) => (
+                                                <div key={idx} className="flex items-start gap-2">
+                                                    <div className="shrink-0 mt-1.5">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                                    </div>
+                                                    <div className="flex-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+                                                        <p className="text-xs text-foreground">{followup.content}</p>
+                                                        <p className="text-[10px] text-muted-foreground mt-1">
+                                                            After {followup.delayValue} {followup.delayUnit}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                             <div ref={endOfMessagesRef} />
