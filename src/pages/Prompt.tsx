@@ -817,6 +817,18 @@ export default function Prompt() {
     // -------------------------------------------------------------------------
 
     const handleSave = useCallback(async () => {
+        // Validate: if keywords are set, initial message is required
+        const hasKeywords = (config.keywordSequence.keywords || config.keywordSequence.keyword || "").trim().length > 0;
+        const hasKeywordPhrases = (config.keywordSequence.keywordPhrases || "").trim().length > 0;
+        const hasInitialMessage = (config.keywordSequence.initialMessage || "").trim().length > 0;
+
+        if ((hasKeywords || hasKeywordPhrases) && !hasInitialMessage) {
+            toast.error("Keyword Sequence requires an Initial Message. Please add one before saving.", {
+                duration: 5000,
+            });
+            return;
+        }
+
         setIsSaving(true);
         try {
             const response = await authorizedFetch(PROMPT_ENDPOINTS.user, {
@@ -1113,13 +1125,10 @@ export default function Prompt() {
                             )}
                         </div>
                         <div className="flex items-center gap-2">
-                            <Button 
-                                onClick={handleSave} 
-                                size="sm" 
-                                className={cn(
-                                    "h-8 px-3",
-                                    hasUnsavedChanges && "bg-amber-500 hover:bg-amber-600 text-white"
-                                )} 
+                            <Button
+                                onClick={handleSave}
+                                size="sm"
+                                className={cn("h-8 px-3", hasUnsavedChanges && "bg-amber-500 hover:bg-amber-600 text-white")}
                                 disabled={isSaving || isFetchingPrompt}
                             >
                                 {isSaving ? "Saving…" : hasUnsavedChanges ? "Save changes" : "Saved"}
