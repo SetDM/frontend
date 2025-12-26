@@ -11,6 +11,7 @@ export const AUTH_ENDPOINTS = {
 export const CONVERSATION_ENDPOINTS = {
     list: `${API_BASE_URL}/conversations`,
     metrics: `${API_BASE_URL}/conversations/metrics`,
+    bulkAutopilot: `${API_BASE_URL}/conversations/bulk/autopilot`,
     detail: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}`,
     autopilot: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}/autopilot`,
     sendMessage: (conversationId: string) => `${API_BASE_URL}/conversations/${conversationId}/messages`,

@@ -607,6 +607,8 @@ export default function Messages() {
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [autopilotBusyConversationId, setAutopilotBusyConversationId] = useState<string | null>(null);
+    const [autopilotBusyIds, setAutopilotBusyIds] = useState<string[]>([]);
+    const [bulkAutopilotBusy, setBulkAutopilotBusy] = useState(false);
     const [aiNotesByConversationId, setAiNotesByConversationId] = useState<Record<string, string[]>>({});
     const [aiNotesRequestConversationId, setAiNotesRequestConversationId] = useState<string | null>(null);
     const [queueCancelBusyIds, setQueueCancelBusyIds] = useState<string[]>([]);
@@ -1472,6 +1474,7 @@ export default function Messages() {
             }
 
             setAutopilotBusyConversationId(conversationId);
+            setAutopilotBusyIds((prev) => (prev.includes(conversationId) ? prev : [...prev, conversationId]));
 
             try {
                 const response = await authorizedFetch(CONVERSATION_ENDPOINTS.autopilot(conversationId), {
@@ -1518,6 +1521,69 @@ export default function Messages() {
                 setError(err instanceof Error ? err.message : "Failed to update autopilot setting.");
             } finally {
                 setAutopilotBusyConversationId((current) => (current === conversationId ? null : current));
+                setAutopilotBusyIds((prev) => prev.filter((id) => id !== conversationId));
+            }
+        },
+        [authorizedFetch, setConversations, setError]
+    );
+
+    const handleBulkToggleAutopilot = useCallback(
+        async (conversationIds: string[], enabled: boolean) => {
+            if (!conversationIds.length) {
+                return;
+            }
+
+            setBulkAutopilotBusy(true);
+            setAutopilotBusyIds((prev) => [...new Set([...prev, ...conversationIds])]);
+
+            try {
+                const response = await authorizedFetch(CONVERSATION_ENDPOINTS.bulkAutopilot, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ conversationIds, enabled }),
+                });
+
+                let payload: unknown = null;
+                try {
+                    payload = await response.json();
+                } catch {
+                    payload = null;
+                }
+
+                if (!response.ok) {
+                    const message =
+                        payload && typeof payload === "object" && payload !== null && "message" in payload && typeof (payload as { message?: unknown }).message === "string"
+                            ? ((payload as { message?: string }).message as string)
+                            : "Failed to update autopilot settings.";
+                    throw new Error(message);
+                }
+
+                // Update local state for successful updates
+                const responseData = payload as { results?: { success?: Array<{ conversationId: string; isAutopilotOn: boolean }> } } | null;
+                const successfulUpdates = responseData?.results?.success || [];
+                const successIds = new Set(successfulUpdates.map((s) => s.conversationId));
+
+                setConversations((prev) =>
+                    prev.map((conversation) =>
+                        successIds.has(conversation.id)
+                            ? {
+                                  ...conversation,
+                                  prospect: {
+                                      ...conversation.prospect,
+                                      autopilotEnabled: enabled,
+                                  },
+                              }
+                            : conversation
+                    )
+                );
+            } catch (err) {
+                console.error("Failed to bulk update autopilot status", err);
+                setError(err instanceof Error ? err.message : "Failed to update autopilot settings.");
+            } finally {
+                setBulkAutopilotBusy(false);
+                setAutopilotBusyIds((prev) => prev.filter((id) => !conversationIds.includes(id)));
             }
         },
         [authorizedFetch, setConversations, setError]
@@ -1894,6 +1960,10 @@ export default function Messages() {
                         hasMore={hasMoreConversations}
                         isLoadingMore={isFetchingMoreConversations}
                         className={cn("md:shrink-0", !showConversationList && "hidden")}
+                        onToggleAutopilot={handleToggleAutopilot}
+                        onBulkToggleAutopilot={handleBulkToggleAutopilot}
+                        autopilotBusyIds={autopilotBusyIds}
+                        bulkAutopilotBusy={bulkAutopilotBusy}
                     />
 
                     <ChatWindow
