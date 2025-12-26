@@ -4,9 +4,8 @@ import { StageBadge } from "@/components/StageBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Loader2, Bot, X, CheckSquare } from "lucide-react";
+import { Search, Loader2, Bot, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ConversationListProps {
@@ -153,8 +152,8 @@ export function ConversationList({
         </div>
       </div>
 
-      {/* Filter Chips + Select Mode Toggle */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-border p-3">
+      {/* Filter Chips */}
+      <div className="flex flex-wrap gap-1.5 border-b border-border p-3">
         {stageFilters.map((filter) => (
           <button
             key={filter}
@@ -170,60 +169,77 @@ export function ConversationList({
             {filterLabels[filter]}
           </button>
         ))}
-        <div className="flex-1" />
-        {prospects.length > 0 && (
-          <button
-            type="button"
-            onClick={toggleSelectMode}
-            className={cn(
-              "rounded-full p-1.5 text-xs transition-colors",
-              isSelectMode
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-secondary"
-            )}
-            title={isSelectMode ? "Exit select mode" : "Select multiple"}
-          >
-            {isSelectMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
-          </button>
-        )}
       </div>
 
-      {/* Bulk Actions Toolbar */}
-      {isSelectMode && (
-        <div className="flex items-center gap-2 border-b border-border bg-muted/50 px-3 py-2">
-          <span className="text-xs text-muted-foreground">
-            {selectedIds.size} selected
-          </span>
-          <div className="flex-1" />
-          <button
-            type="button"
-            onClick={selectedIds.size === prospects.length ? clearSelection : selectAll}
-            className="text-xs text-primary hover:underline"
-          >
-            {selectedIds.size === prospects.length ? "Deselect all" : "Select all"}
-          </button>
-          {selectedIds.size > 0 && (
+      {/* Select Mode Toggle Bar */}
+      {prospects.length > 0 && (
+        <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
+          {isSelectMode ? (
             <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1"
-                onClick={() => handleBulkAutopilot(true)}
-                disabled={bulkAutopilotBusy}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={selectedIds.size === prospects.length && prospects.length > 0}
+                  onCheckedChange={(checked) => checked ? selectAll() : clearSelection()}
+                  className="h-4 w-4"
+                />
+                <span className="text-xs text-foreground font-medium">
+                  {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {selectedIds.size > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkAutopilot(true)}
+                      disabled={bulkAutopilotBusy}
+                      className={cn(
+                        "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                        "bg-green-500/10 text-green-600 hover:bg-green-500/20 dark:text-green-400",
+                        bulkAutopilotBusy && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <Bot className="h-3 w-3" />
+                      <span className="hidden sm:inline">Enable</span> AI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkAutopilot(false)}
+                      disabled={bulkAutopilotBusy}
+                      className={cn(
+                        "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                        "bg-muted text-muted-foreground hover:bg-muted/80",
+                        bulkAutopilotBusy && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <Bot className="h-3 w-3" />
+                      Off
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleSelectMode}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                  Done
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {prospects.length} conversation{prospects.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                type="button"
+                onClick={toggleSelectMode}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
-                <Bot className="h-3 w-3" />
-                Enable AI
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs gap-1"
-                onClick={() => handleBulkAutopilot(false)}
-                disabled={bulkAutopilotBusy}
-              >
-                <Bot className="h-3 w-3" />
-                Disable AI
-              </Button>
+                <Checkbox className="h-3 w-3 pointer-events-none" />
+                Select
+              </button>
             </>
           )}
         </div>
@@ -266,15 +282,17 @@ export function ConversationList({
             return (
               <div
                 key={prospect.id}
+                onClick={() => isSelectMode ? toggleSelection(prospect.id) : onSelectProspect(prospect)}
                 className={cn(
-                  "flex w-full items-start gap-3 border-b border-border p-3 text-left transition-colors hover:bg-secondary/50",
-                  selectedProspect?.id === prospect.id && "bg-secondary",
-                  isSelected && "bg-primary/5"
+                  "flex w-full items-center gap-2 border-b border-border p-3 text-left transition-colors cursor-pointer",
+                  "hover:bg-secondary/50",
+                  selectedProspect?.id === prospect.id && !isSelectMode && "bg-secondary",
+                  isSelected && isSelectMode && "bg-primary/10"
                 )}
               >
                 {/* Checkbox for multi-select */}
                 {isSelectMode && (
-                  <div className="flex items-center pt-1">
+                  <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => toggleSelection(prospect.id)}
@@ -283,57 +301,52 @@ export function ConversationList({
                   </div>
                 )}
 
-                {/* Clickable area for selecting conversation */}
-                <button
-                  type="button"
-                  onClick={() => !isSelectMode && onSelectProspect(prospect)}
-                  className="flex flex-1 items-start gap-3 text-left min-w-0"
-                  disabled={isSelectMode}
-                >
-                  <div className="relative">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-gradient-to-br from-primary/20 to-pink/20 text-foreground text-sm font-medium">
-                        {avatarFallback || displayName.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    {prospect.isUnread && (
-                      <div className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-card bg-pink" />
-                    )}
-                  </div>
+                {/* Avatar */}
+                <div className="relative shrink-0">
+                  <Avatar className="h-10 w-10">
+                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-pink/20 text-foreground text-sm font-medium">
+                      {avatarFallback || displayName.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  {prospect.isUnread && (
+                    <div className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-card bg-pink" />
+                  )}
+                </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-foreground truncate">
-                        {displayName}
-                      </span>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {prospect.lastMessageTime}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <StageBadge stage={prospect.stage} className="text-[10px] px-1.5 py-0" />
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
-                      {prospect.lastMessage}
-                    </p>
+                {/* Content */}
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground truncate flex-1">
+                      {displayName}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                      {prospect.lastMessageTime}
+                    </span>
                   </div>
-                </button>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <StageBadge stage={prospect.stage} className="text-[10px] px-1.5 py-0" />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground truncate">
+                    {prospect.lastMessage}
+                  </p>
+                </div>
 
-                {/* Autopilot Toggle */}
-                {!isSelectMode && onToggleAutopilot && (
+                {/* Autopilot Toggle - Always visible, disabled in select mode */}
+                {onToggleAutopilot && (
                   <div 
-                    className="flex flex-col items-center gap-0.5 pt-1"
+                    className="shrink-0 flex flex-col items-center gap-0.5"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Switch
                       checked={prospect.autopilotEnabled}
                       onCheckedChange={(checked) => onToggleAutopilot(prospect.id, checked)}
-                      disabled={isAutopilotBusy || prospect.isFlagged}
-                      className="scale-75"
+                      disabled={isSelectMode || isAutopilotBusy || prospect.isFlagged}
+                      className={cn("scale-[0.65]", isSelectMode && "opacity-50")}
                     />
                     <span className={cn(
-                      "text-[9px] font-medium",
-                      prospect.autopilotEnabled ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+                      "text-[9px] font-medium leading-none",
+                      prospect.autopilotEnabled ? "text-green-600 dark:text-green-400" : "text-muted-foreground",
+                      isSelectMode && "opacity-50"
                     )}>
                       {isAutopilotBusy ? "..." : prospect.autopilotEnabled ? "AI" : "Off"}
                     </span>
