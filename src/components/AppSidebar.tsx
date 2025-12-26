@@ -5,6 +5,7 @@ import { LayoutDashboard, MessageCircle, FileText, Settings, LogOut, ChevronDown
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/context/ThemeContext";
+import { useRealtime } from "@/context/RealtimeContext";
 import logo from "@/assets/logo.svg";
 import {
     DropdownMenu,
@@ -33,6 +34,7 @@ interface AppSidebarProps {
 export function AppSidebar({ className }: AppSidebarProps) {
     const { user, workspaces, activeWorkspaceId, switchWorkspace, redirectToLogin, logout } = useAuth();
     const { resolvedTheme, toggleTheme } = useTheme();
+    const { unreadCount, clearUnread } = useRealtime();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     // Get display info based on user type
@@ -129,20 +131,31 @@ export function AppSidebar({ className }: AppSidebarProps) {
 
             {/* Navigation */}
             <nav className="flex-1 space-y-1 p-3">
-                {navItems.map((item) => (
-                    <NavLink
-                        key={item.title}
-                        to={item.url}
-                        end={item.url === "/"}
-                        className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        )}
-                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
-                    >
-                        <item.icon className="h-4 w-4" />
-                        {item.title}
-                    </NavLink>
-                ))}
+                {navItems.map((item) => {
+                    const isMessages = item.url === "/messages";
+                    const showBadge = isMessages && unreadCount > 0;
+
+                    return (
+                        <NavLink
+                            key={item.title}
+                            to={item.url}
+                            end={item.url === "/"}
+                            className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                            )}
+                            activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                            onClick={isMessages ? clearUnread : undefined}
+                        >
+                            <item.icon className="h-4 w-4" />
+                            <span className="flex-1">{item.title}</span>
+                            {showBadge && (
+                                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+                                    {unreadCount > 99 ? "99+" : unreadCount}
+                                </span>
+                            )}
+                        </NavLink>
+                    );
+                })}
             </nav>
 
             {/* Theme Toggle & Logout */}

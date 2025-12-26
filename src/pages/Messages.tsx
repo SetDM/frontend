@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { useRealtime } from "@/context/RealtimeContext";
 import { BACKEND_URL, CONVERSATION_ENDPOINTS, USER_ENDPOINTS } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationRecord, FunnelStage, Message, Prospect, InstagramUserProfile, QueuedMessage } from "@/types";
@@ -587,8 +588,14 @@ const extractUserProfile = (payload: unknown): InstagramUserProfile | null => {
 
 export default function Messages() {
     const { authorizedFetch, authToken, activeWorkspaceId } = useAuth();
+    const { clearUnread } = useRealtime();
     usePageTitle("Messages");
     const isMobile = useIsMobile();
+
+    // Clear unread count when Messages page is opened
+    useEffect(() => {
+        clearUnread();
+    }, [clearUnread]);
     const [searchParams] = useSearchParams();
     const stageParam = (searchParams.get("stage") as FunnelStage | "all") || "all";
     const initialStage = stageFilters.includes(stageParam) ? stageParam : "all";

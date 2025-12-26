@@ -5,6 +5,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/context/AuthProvider";
 import { UnsavedChangesProvider } from "@/context/UnsavedChangesContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { RealtimeProvider } from "@/context/RealtimeContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
@@ -31,8 +32,9 @@ const App = () => (
                 <Sonner />
                 <BrowserRouter>
                     <AuthProvider>
-                        <UnsavedChangesProvider>
-                            <Routes>
+                        <RealtimeProvider>
+                            <UnsavedChangesProvider>
+                                <Routes>
                                 <Route path="/login" element={<Login />} />
                                 <Route path="/auth/success" element={<AuthSuccess />} />
                                 <Route path="/auth/error" element={<AuthError />} />
@@ -50,8 +52,9 @@ const App = () => (
                                     <Route path="/settings" element={<Settings />} />
                                     <Route path="*" element={<NotFound />} />
                                 </Route>
-                            </Routes>
-                        </UnsavedChangesProvider>
+                                </Routes>
+                            </UnsavedChangesProvider>
+                        </RealtimeProvider>
                     </AuthProvider>
                 </BrowserRouter>
             </TooltipProvider>
