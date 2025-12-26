@@ -4,8 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { BACKEND_URL } from "@/lib/config";
 
 const REALTIME_EVENTS = {
-    MESSAGE_CREATED: "message:created",
-    QUEUE_UPDATED: "queue:updated",
+    MESSAGE_CREATED: "conversation:message.created",
+    QUEUE_UPDATED: "conversation:queue.updated",
     UPSERTED: "conversation:upserted",
 };
 
