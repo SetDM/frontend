@@ -18,9 +18,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
 import { useUnsavedChanges } from "@/context/UnsavedChangesContext";
-import { PROMPT_ENDPOINTS } from "@/lib/config";
+import { PROMPT_ENDPOINTS, SETTINGS_ENDPOINTS } from "@/lib/config";
 import { StageBadge } from "@/components/StageBadge";
-import type { FunnelStage } from "@/types";
+import type { FunnelStage, WorkspaceSettings } from "@/types";
 
 type StageContext = "responded" | "lead" | "qualified" | "booking_sent" | "call_booked";
 
@@ -666,6 +666,9 @@ export default function Prompt() {
     const scrollRef = useRef<HTMLDivElement>(null);
     const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
+    // Workspace settings (for calendar link in test chat)
+    const [workspaceSettings, setWorkspaceSettings] = useState<WorkspaceSettings | null>(null);
+
     // -------------------------------------------------------------------------
     // API INTEGRATION
     // -------------------------------------------------------------------------
@@ -755,6 +758,34 @@ export default function Prompt() {
         [activeWorkspaceId, authorizedFetch]
     );
 
+    // Fetch workspace settings (for calendar link in test chat)
+    const hydrateWorkspaceSettings = useCallback(
+        async (signal?: AbortSignal) => {
+            if (!activeWorkspaceId) {
+                return;
+            }
+
+            try {
+                const response = await authorizedFetch(SETTINGS_ENDPOINTS.workspace, { signal });
+                const payload = await response.json().catch(() => null);
+
+                if (signal?.aborted) {
+                    return;
+                }
+
+                if (response.ok && payload?.data) {
+                    setWorkspaceSettings(payload.data);
+                }
+            } catch (error) {
+                if (signal?.aborted) {
+                    return;
+                }
+                console.error("Failed to load workspace settings for test chat:", error);
+            }
+        },
+        [activeWorkspaceId, authorizedFetch]
+    );
+
     useEffect(() => {
         const abortController = new AbortController();
         setIsFetchingPrompt(true);
@@ -766,11 +797,12 @@ export default function Prompt() {
         }
 
         hydratePrompt(abortController.signal);
+        hydrateWorkspaceSettings(abortController.signal);
 
         return () => {
             abortController.abort();
         };
-    }, [activeWorkspaceId, hydratePrompt, resetPromptState]);
+    }, [activeWorkspaceId, hydratePrompt, hydrateWorkspaceSettings, resetPromptState]);
 
     // -------------------------------------------------------------------------
     // EVENT HANDLERS
@@ -914,10 +946,11 @@ export default function Prompt() {
                     history: historyPayload,
                     config,
                     stageTag: stageContext,
+                    workspaceSettings: workspaceSettings || undefined,
                 }),
             });
 
-            const payload = (await response.json().catch(() => null)) as { reply?: string; message?: string } | null;
+            const payload = (await response.json().catch(() => null)) as { reply?: string; stageTag?: string; message?: string } | null;
 
             if (!response.ok) {
                 const message = payload?.message || "Failed to run prompt test.";
@@ -925,11 +958,32 @@ export default function Prompt() {
             }
 
             const replyText = payload?.reply?.trim();
+
+            // Update stage context if AI returned a new stage tag
+            const responseStageTag = payload?.stageTag;
+            if (responseStageTag && typeof responseStageTag === "string") {
+                // Map the stage tag to our stage context values
+                const stageMapping: Record<string, StageContext> = {
+                    responded: "responded",
+                    lead: "lead",
+                    qualified: "qualified",
+                    booking_sent: "booking_sent",
+                    "booking-sent": "booking_sent",
+                    call_booked: "call_booked",
+                    "call-booked": "call_booked",
+                };
+                const mappedStage = stageMapping[responseStageTag.toLowerCase().replace(/\s+/g, "_")];
+                if (mappedStage) {
+                    setStageContext(mappedStage);
+                }
+            }
+
             const aiResponse: TestMessage = {
                 id: createMessageId(),
                 content: replyText && replyText.length ? replyText : "The AI returned an empty response. Double-check your prompt configuration.",
                 isUser: false,
-                stageTag: stageContext as FunnelStage,
+                // Use the response stage tag if available, otherwise use current context
+                stageTag: (responseStageTag || stageContext) as FunnelStage,
             };
 
             setTestMessages((prev) => [...prev, aiResponse]);
